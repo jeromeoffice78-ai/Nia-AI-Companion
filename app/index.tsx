@@ -11,14 +11,16 @@ export default function Home(){
  const [draft,setDraft]=useState('');
  const [endpoint,setEndpoint]=useState('');
  const [token,setToken]=useState('');
+ const [model,setModel]=useState('local-model');
  const [setup,setSetup]=useState(false);
  const [busy,setBusy]=useState(false);
  const [speak,setSpeak]=useState(true);
  const [checkins,setCheckins]=useState(false);
  useEffect(()=>{
-  AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint']).then(entries=>{
+  AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model']).then(entries=>{
    const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
    setEndpoint(entries[1][1]||'');
+   setModel(entries[2][1]||'local-model');
   }).catch(()=>{});
   checkInsEnabled().then(setCheckins).catch(()=>{});
   SecureStore.getItemAsync('nia_api_token').then(v=>setToken(v||'')).catch(()=>{});
@@ -28,7 +30,7 @@ export default function Home(){
   if(e&&!/^https:\/\//i.test(e)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(e)){
    Alert.alert('Secure connection required','Use HTTPS for remote servers.');return;
   }
-  await AsyncStorage.setItem('nia_endpoint',e);
+  await AsyncStorage.multiSet([['nia_endpoint',e],['nia_model',model.trim()||'local-model']]);
   await SecureStore.setItemAsync('nia_api_token',token);
   setSetup(false);
  }
@@ -43,7 +45,7 @@ export default function Home(){
    const response=await fetch(endpoint,{
     method:'POST',
     headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},
-    body:JSON.stringify({model:'local-model',messages:[{role:'system',content:'You are Nia, an AI companion. Be warm, playful, considerate, and clear that you are AI. Do not claim to be conscious or to have human feelings. Respect the user’s boundaries.'},...history],stream:false})
+    body:JSON.stringify({model:model.trim()||'local-model',messages:[{role:'system',content:'You are Nia, an AI companion. Be warm, playful, considerate, and clear that you are AI. Do not claim to be conscious or to have human feelings. Respect the user’s boundaries.'},...history],stream:false})
    });
    if(!response.ok)throw new Error('HTTP '+response.status);
    const data=await response.json();
@@ -66,6 +68,7 @@ export default function Home(){
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
     <TextInput value={endpoint} onChangeText={setEndpoint} style={s.input} autoCapitalize="none" placeholder="https://server/v1/chat/completions" placeholderTextColor="#bbb"/>
+    <TextInput value={model} onChangeText={setModel} style={s.input} autoCapitalize="none" placeholder="Model name" placeholderTextColor="#bbb"/>
     <TextInput value={token} onChangeText={setToken} style={s.input} secureTextEntry placeholder="Optional API token" placeholderTextColor="#bbb"/>
     <Pressable onPress={saveConfig} style={s.button}><Text style={s.white}>Save settings</Text></Pressable>
     <Pressable onPress={()=>setSpeak(!speak)} style={s.secondary}><Text style={s.white}>Spoken replies: {speak?'On':'Off'}</Text></Pressable>
