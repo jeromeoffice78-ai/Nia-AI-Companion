@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Nia AI Companion",
+    "slug": "nia-ai-companion",
+    "scheme": "nia",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.nia.companion",
+      "permissions": [
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-audio",
+      "expo-image-picker",
+      "expo-secure-store"
+    ]
+  }
+}
