@@ -3,6 +3,7 @@ import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert} from 'react-n
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
+import NiaAvatar from '../src/NiaAvatar';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 type Message={role:'user'|'assistant';content:string};
 const MEMORY_KEY='nia_messages_v2';
@@ -64,6 +65,7 @@ export default function Home(){
  async function clearHistory(){await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
  return <View style={s.screen}>
   <Text style={s.title}>Nia</Text>
+  <NiaAvatar/>
   <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D avatar not yet installed</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
