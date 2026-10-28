@@ -23,7 +23,9 @@ jobs:
       - name: Validate project
         run: npm test
       - name: Align Expo dependency versions
-        run: npx expo install --fix --non-interactive
+        run: CI=1 npx expo install --fix
+      - name: Check TypeScript
+        run: npx tsc --noEmit
       - name: Generate Android project
         run: npx expo prebuild --platform android --non-interactive --clean
       - name: Build debug APK
