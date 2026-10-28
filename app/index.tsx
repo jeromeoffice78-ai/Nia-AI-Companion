@@ -3,6 +3,7 @@ import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert} from 'react-n
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
+import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 type Message={role:'user'|'assistant';content:string};
 const MEMORY_KEY='nia_messages_v2';
 export default function Home(){
@@ -13,11 +14,13 @@ export default function Home(){
  const [setup,setSetup]=useState(false);
  const [busy,setBusy]=useState(false);
  const [speak,setSpeak]=useState(true);
+ const [checkins,setCheckins]=useState(false);
  useEffect(()=>{
   AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint']).then(entries=>{
    const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
    setEndpoint(entries[1][1]||'');
   }).catch(()=>{});
+  checkInsEnabled().then(setCheckins).catch(()=>{});
   SecureStore.getItemAsync('nia_api_token').then(v=>setToken(v||'')).catch(()=>{});
  },[]);
  async function saveConfig(){
@@ -52,6 +55,10 @@ export default function Home(){
   }catch(e){Alert.alert('AI connection failed',String(e));}
   finally{setBusy(false);}
  }
+ async function toggleCheckins(){
+  try {if(checkins){await disableCheckIns();setCheckins(false);}else{await enableCheckIns();setCheckins(true);}}
+  catch(e){Alert.alert('Notifications unavailable',String(e));}
+ }
  async function clearHistory(){await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
  return <View style={s.screen}>
   <Text style={s.title}>Nia</Text>
@@ -62,6 +69,7 @@ export default function Home(){
     <TextInput value={token} onChangeText={setToken} style={s.input} secureTextEntry placeholder="Optional API token" placeholderTextColor="#bbb"/>
     <Pressable onPress={saveConfig} style={s.button}><Text style={s.white}>Save settings</Text></Pressable>
     <Pressable onPress={()=>setSpeak(!speak)} style={s.secondary}><Text style={s.white}>Spoken replies: {speak?'On':'Off'}</Text></Pressable>
+    <Pressable onPress={toggleCheckins} style={s.secondary}><Text style={s.white}>Daytime check-ins: {checkins?'On':'Off'}</Text></Pressable>
     <Pressable onPress={clearHistory} style={s.secondary}><Text style={s.white}>Delete conversation history</Text></Pressable>
    </View>:null}
   <ScrollView style={s.history}>{messages.map((m,i)=><Text key={i} style={s.msg}>{m.role==='user'?'You':'Nia'}: {m.content}</Text>)}</ScrollView>
