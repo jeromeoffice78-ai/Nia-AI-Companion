@@ -38,3 +38,20 @@ test('active avatar screen loads bundled model and supports animation',()=>{
  assert.match(avatar,/niaBundledModel/);
  assert.match(avatar,/Dance/);
 });
+
+test('bundled GLB contains playable Idle and Dance clips',()=>{
+ const file=readFileSync('assets/nia-character-animated.glb');
+ const jsonSize=file.readUInt32LE(12);
+ const chunkType=file.toString('ascii',16,20);
+ assert.equal(chunkType,'JSON');
+ const gltf=JSON.parse(file.subarray(20,20+jsonSize).toString('utf8'));
+ assert.ok(Array.isArray(gltf.animations));
+ for(const name of ['Idle','Dance']){
+  const clip=gltf.animations.find(a=>a.name===name);
+  assert.ok(clip,'missing animation '+name);
+  assert.ok(clip.channels.length>0,'no animation channels '+name);
+  for(const channel of clip.channels){
+   assert.ok(channel.target.node<gltf.nodes.length,'invalid animation target');
+  }
+ }
+});
