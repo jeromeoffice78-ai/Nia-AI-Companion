@@ -5,6 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
 import NiaAvatar from '../src/NiaAvatar';
 import Avatar3D from '../src/Avatar3D';
+import {VisemeCue,validateVisemes} from '../src/visemes';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 type Message={role:'user'|'assistant';content:string};
@@ -22,6 +23,7 @@ export default function Home(){
  const [busy,setBusy]=useState(false);
  const [speak,setSpeak]=useState(true);
  const [avatarSpeaking,setAvatarSpeaking]=useState(false);
+ const [visemeCues,setVisemeCues]=useState<VisemeCue[]>([]);
  const [checkins,setCheckins]=useState(false);
  useEffect(()=>()=>{void Speech.stop();},[]);
  useEffect(()=>{
@@ -63,13 +65,16 @@ export default function Home(){
    setMessages(updated);await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));
    if(speak){
     await Speech.stop();
+    // Use provider-supplied timing only when available; Expo TTS itself
+    // does not provide phoneme timestamps or a synchronized audio clock.
+    try{setVisemeCues(data?.visemes?validateVisemes(data.visemes):[]);}catch{setVisemeCues([]);}
     setAvatarSpeaking(true);
     try{
      Speech.speak(answer,{
       language:'en-US',
-      onDone:()=>setAvatarSpeaking(false),
-      onStopped:()=>setAvatarSpeaking(false),
-      onError:()=>setAvatarSpeaking(false)
+      onDone:()=>{setAvatarSpeaking(false);setVisemeCues([]);},
+      onStopped:()=>{setAvatarSpeaking(false);setVisemeCues([]);},
+      onError:()=>{setAvatarSpeaking(false);setVisemeCues([]);}
      });
     }catch(speechError){setAvatarSpeaking(false);}
 
@@ -81,11 +86,11 @@ export default function Home(){
   try {if(checkins){await disableCheckIns();setCheckins(false);}else{await enableCheckIns();setCheckins(true);}}
   catch(e){Alert.alert('Notifications unavailable',String(e));}
  }
- async function clearHistory(){await Speech.stop();setAvatarSpeaking(false);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
+ async function clearHistory(){await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
  return <View style={s.screen}>
   <Text style={s.title}>Nia</Text>
   <Pressable style={s.secondary} onPress={()=>setShow3d(!show3d)}><Text style={s.white}>{show3d?'Show original photo':'Show animated 3D prototype'}</Text></Pressable>
-  {show3d?<Avatar3D speaking={avatarSpeaking}/>:<NiaAvatar/>}
+  {show3d?<Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>:<NiaAvatar/>}
   <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
