@@ -17,7 +17,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - name: Configure Android SDK from runner
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+          test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}" || { echo 'Android SDK not found on runner'; exit 1; }
+          java -version
       - name: Verify prototype model exists
         run: test -s assets/nia-character-animated.glb
       - name: Install dependencies
