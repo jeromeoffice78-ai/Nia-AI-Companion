@@ -15,6 +15,10 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
  const [loadedName,setLoadedName]=useState('Bundled prototype');
  const controller=useRef<Controller|null>(null);
  const disposed=useRef(false);
+ const latestCues=useRef(visemes);
+ const latestSpeaking=useRef(externalSpeaking||speaking);
+ latestCues.current=visemes;
+ latestSpeaking.current=externalSpeaking||speaking;
  const loadGeneration=useRef(0);
  useEffect(()=>{disposed.current=false;return()=>{disposed.current=true;loadGeneration.current++;controller.current?.dispose();controller.current=null}},[]);
  useEffect(()=>{controller.current?.setSpeaking(externalSpeaking||speaking);},[externalSpeaking,speaking]);
@@ -37,8 +41,8 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
    if(disposed.current||generation!==loadGeneration.current){mounted.dispose();return;}
    controller.current=mounted;
    mounted.play(motion);
-   mounted.setSpeaking(externalSpeaking||speaking);
-   if(visemes.length)mounted.setVisemes(visemes);
+   mounted.setSpeaking(latestSpeaking.current);
+   if(latestCues.current.length)mounted.setVisemes(latestCues.current);
   }catch(e){if(!disposed.current&&generation===loadGeneration.current)setError(String(e));}
  }
  function select(next:Motion){if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}setError('');setMotion(next);}
@@ -46,6 +50,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
  return <View style={s.wrap}>
   <GLView key={modelUri||'bundled'} style={s.canvas} onContextCreate={onContextCreate}/>
   <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import Nia appearance rig (.glb)</Text></Pressable>
+  {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Bundled prototype');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
   <Text style={s.caption}>Model: {loadedName}</Text>
   {error?<Text style={s.error}>Model loading failed: {error}</Text>:null}
   <View style={s.row}>{(['Idle','Walk','Dance','Wave'] as Motion[]).map(v=>
