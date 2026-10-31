@@ -30,7 +30,13 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  const head=model.getObjectByName('head');
  const rigged=!!model.getObjectByName('Hips')&&!!model.getObjectByName('Head');
  const faceMeshes:THREE.Mesh[]=[];
- model.traverse(o=>{if(o instanceof THREE.Mesh&&o.morphTargetDictionary)faceMeshes.push(o);});
+ let skinnedMeshes=0;
+ let boneCount=0;
+ const morphNames=new Set<string>();
+ model.traverse(o=>{
+  if(o instanceof THREE.SkinnedMesh){skinnedMeshes++;boneCount=Math.max(boneCount,o.skeleton.bones.length);}
+  if(o instanceof THREE.Mesh&&o.morphTargetDictionary){faceMeshes.push(o);Object.keys(o.morphTargetDictionary).forEach(name=>morphNames.add(name));}
+ });
  // Convert independently positioned meshes into pivoted joints.
  // A pivot at the shoulder/hip rotates the entire limb around its attachment,
  // rather than spinning an ellipsoid around its own centre.
@@ -136,7 +142,7 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   gl.endFrameEXP();
  }
  tick();
- return {play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
+ return {diagnostics:{rigged,skinnedMeshes,boneCount,morphTargets:[...morphNames],animations:clips.map(c=>c.name)},play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
   active=false;cancelAnimationFrame(frame);mixer.stopAllAction();
   scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();const mats=Array.isArray(o.material)?o.material:[o.material];for(const mat of mats)mat.dispose();}});
   renderer.dispose();
