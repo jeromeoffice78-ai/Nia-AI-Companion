@@ -26,7 +26,8 @@
           "cameraPermission": "Allow Nia to show your front camera while you choose to use the camera preview.",
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "./plugins/withNiaOverlay"
     ]
   }
 }
