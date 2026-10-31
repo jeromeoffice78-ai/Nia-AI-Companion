@@ -162,7 +162,7 @@ export default function Home(){
   catch(e){Alert.alert('Notifications unavailable',String(e));}
  }
  async function clearHistory(){await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
- return <View style={s.screen}>
+ return <ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
   <Pressable style={s.secondary} onPress={async()=>{try{const result=await showNiaOverlay();if(result==='permission-required')Alert.alert('Overlay permission','Enable Display over other apps for Nia, return to the app, then tap this button again.');}catch(e){Alert.alert('Floating Nia unavailable',String(e));}}}><Text style={s.white}>Show floating Nia over other apps</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{try{await hideNiaOverlay();}catch(e){Alert.alert('Floating Nia unavailable',String(e));}}}><Text style={s.white}>Close floating Nia</Text></Pressable>
@@ -201,9 +201,9 @@ export default function Home(){
   <TextInput style={s.input} value={question} onChangeText={setQuestion} placeholder="Question to ask (saved for your reference)" placeholderTextColor="#bbb"/>
   <Pressable style={s.secondary} onPress={async()=>{try{await openDialer(phone);}catch(e){Alert.alert('Cannot dial',String(e));}}}><Text style={s.white}>Open phone dialer</Text></Pressable>
   <Pressable onPress={shareHistory} style={s.secondary}><Text style={s.white}>Export conversation</Text></Pressable>
-  <ScrollView style={s.history}>{messages.map((m,i)=><Text key={i} style={s.msg}>{m.role==='user'?'You':'Nia'}: {m.content}</Text>)}</ScrollView>
+  <View style={s.history}>{messages.map((m,i)=><Text key={i} style={s.msg}>{m.role==='user'?'You':'Nia'}: {m.content}</Text>)}</View>
   <TextInput style={s.input} value={draft} onChangeText={setDraft} placeholder="Message Nia" placeholderTextColor="#bbb" multiline/>
   <Pressable disabled={busy} style={s.button} onPress={send}><Text style={s.white}>{busy?'Thinking…':'Send'}</Text></Pressable>
- </View>;
+ </ScrollView>;
 }
-const s=StyleSheet.create({screen:{flex:1,backgroundColor:'#201724',paddingTop:65,padding:20},title:{fontSize:32,color:'#fff',fontWeight:'bold'},note:{color:'#e7bed8',marginVertical:12},history:{flex:1},msg:{color:'#fff',padding:10},input:{borderColor:'#ad86a5',borderWidth:1,borderRadius:10,padding:12,color:'#fff',marginTop:8},button:{backgroundColor:'#704566',padding:13,borderRadius:10,marginTop:10},secondary:{borderColor:'#704566',borderWidth:1,padding:10,borderRadius:10,marginTop:8},white:{color:'#fff',textAlign:'center'}});
+const s=StyleSheet.create({screen:{flex:1,backgroundColor:'#201724'},screenContent:{paddingTop:48,paddingHorizontal:20,paddingBottom:40},title:{fontSize:32,color:'#fff',fontWeight:'bold'},note:{color:'#e7bed8',marginVertical:12},history:{flex:1},msg:{color:'#fff',padding:10},input:{borderColor:'#ad86a5',borderWidth:1,borderRadius:10,padding:12,color:'#fff',marginTop:8},button:{backgroundColor:'#704566',padding:13,borderRadius:10,marginTop:10},secondary:{borderColor:'#704566',borderWidth:1,padding:10,borderRadius:10,marginTop:8},white:{color:'#fff',textAlign:'center'}});
