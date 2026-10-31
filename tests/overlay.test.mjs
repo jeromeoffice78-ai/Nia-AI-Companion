@@ -28,3 +28,10 @@ test('tablet layout scrolls when half-screen avatar consumes available height',(
  assert.match(screen,/keyboardShouldPersistTaps="handled"/);
  assert.match(screen,/<\/ScrollView>;/);
 });
+
+test('tapping overlay returns to Nia and close clears window state',()=>{
+ const native=read('native-overlay/NiaOverlayModule.java');
+ assert.match(native,/getLaunchIntentForPackage/);
+ assert.match(native,/FLAG_ACTIVITY_NEW_TASK/);
+ assert.match(native,/params=null/);
+});
