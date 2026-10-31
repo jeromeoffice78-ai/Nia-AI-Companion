@@ -29,7 +29,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
    const selected=await DocumentPicker.getDocumentAsync({type:'*/*',copyToCacheDirectory:true});
    if(selected.canceled)return;
    const file=selected.assets[0];
-   if(!/\\.glb$/i.test(file.name))throw new Error('Select a .glb 3D rig file');
+   if(!/\.glb$/i.test(file.name))throw new Error('Select a .glb 3D rig file');
    loadGeneration.current++;
    controller.current?.dispose();controller.current=null;
    setLoadedName(file.name);setModelUri(file.uri);setDiagnostics('Loading selected GLB…');setError('');
