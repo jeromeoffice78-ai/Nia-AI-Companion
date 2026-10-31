@@ -5,7 +5,6 @@ import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
 import {CameraView,useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import NiaAvatar from '../src/NiaAvatar';
 import Avatar3D from '../src/Avatar3D';
 import {VisemeCue,validateVisemes} from '../src/visemes';
 import {openDialer,callCapabilityNotice} from '../src/phone';
@@ -25,7 +24,6 @@ export default function Home(){
  const [model,setModel]=useState('llama-3.3-70b-versatile');
  const [phone,setPhone]=useState('');
  const [question,setQuestion]=useState('');
- const [show3d,setShow3d]=useState(false);
  const [setup,setSetup]=useState(false);
  const [busy,setBusy]=useState(false);
  const [speak,setSpeak]=useState(true);
