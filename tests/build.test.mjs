@@ -115,3 +115,10 @@ test('GLB picker accepts ordinary filenames and exposes rig diagnostics',()=>{
  assert.match(renderer,/skinnedMeshes/);
  assert.match(renderer,/morphTargets/);
 });
+
+test('speaking without timed cues still drives facial morph targets',()=>{
+ const renderer=read('src/loadNiaGLB.ts');
+ assert.match(renderer,/fallbackLevel=cues.length/);
+ assert.match(renderer,/speaking\?'viseme_AA':null/);
+ assert.match(renderer,/selected=name;/);
+});
