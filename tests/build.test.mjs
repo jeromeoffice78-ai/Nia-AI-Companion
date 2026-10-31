@@ -6,7 +6,7 @@ test('Expo Router and Android dependencies',()=>{
  const p=JSON.parse(read('package.json'));
  assert.equal(p.main,'expo-router/entry');
  for(const d of ['expo-router','expo-gl','expo-camera','expo-secure-store'])assert.ok(p.dependencies[d],d);
- assert.ok(p.devDependencies['@expo/config-plugins']);
+ assert.ok(p.devDependencies.typescript);
 });
 test('Nia main screen uses 3D renderer and secure gateway',()=>{
  const screen=read('app/index.tsx');
