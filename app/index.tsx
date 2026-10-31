@@ -1,5 +1,5 @@
 import React,{useEffect,useState,useRef} from 'react';
-import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert,Share} from 'react-native';
+import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert,Share,AppState} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
@@ -40,6 +40,12 @@ export default function Home(){
  const [cameraPermission,requestCameraPermission]=useCameraPermissions();
  const cameraRef=useRef<CameraView>(null);
  useEffect(()=>()=>{void Speech.stop();},[]);
+ useEffect(()=>{
+  const subscription=AppState.addEventListener('change',state=>{
+   if(state!=='active')setCameraVisible(false);
+  });
+  return()=>subscription.remove();
+ },[]);
  useEffect(()=>{
   AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model','nia_flirty']).then(entries=>{
    const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
