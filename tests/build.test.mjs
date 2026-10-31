@@ -105,3 +105,13 @@ test('AI response accepts only validated viseme timing',()=>{
  assert.match(screen,/validateVisemes\(data.visemes\)/);
  assert.match(visemes,/previousEnd/);
 });
+
+test('GLB picker accepts ordinary filenames and exposes rig diagnostics',()=>{
+ const avatar=read('src/Avatar3D.tsx');
+ const renderer=read('src/loadNiaGLB.ts');
+ assert.ok(avatar.includes("if(!/"+String.fromCharCode(92)+".glb$/i.test(file.name))"));
+ assert.match(avatar,/Restore bundled model/);
+ assert.match(avatar,/Diagnostics:/);
+ assert.match(renderer,/skinnedMeshes/);
+ assert.match(renderer,/morphTargets/);
+});
