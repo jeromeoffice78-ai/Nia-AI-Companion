@@ -3,7 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ENABLED_KEY = 'nia_checkins_enabled';
 const IDS_KEY = 'nia_checkin_ids';
-const DAY_SECONDS = 24 * 60 * 60;
 
 export async function disableCheckIns():Promise<void> {
  const stored=await AsyncStorage.getItem(IDS_KEY);
@@ -24,15 +23,15 @@ export async function enableCheckIns():Promise<number> {
   });
  }
  const ids:string[]=[];
- // Schedule one notification per day for the next 7 days. The times vary
- // deterministically and remain between 9:00 and 20:59 local time.
+ // Seven recurring weekly notifications: one per weekday, each at a
+ // deterministic daytime hour. Unlike one-time DATE triggers, these do not
+ // silently stop after the first week.
  for(let day=1;day<=7;day++){
-  const at=new Date();
-  at.setDate(at.getDate()+day);
-  at.setHours(9+((day*7)%12), (day*17)%60,0,0);
+  const hour=9+((day*7)%12);
+  const minute=(day*17)%60;
   const id=await Notifications.scheduleNotificationAsync({
    content:{title:'Nia',body:'Would you like to talk for a while?',data:{type:'checkin'}},
-   trigger:{type:Notifications.SchedulableTriggerInputTypes.DATE,date:at,channelId:'nia-checkins'},
+   trigger:{type:Notifications.SchedulableTriggerInputTypes.WEEKLY,weekday:day,hour,minute,channelId:'nia-checkins'},
   });
   ids.push(id);
  }
