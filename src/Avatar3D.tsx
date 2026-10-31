@@ -6,13 +6,14 @@ import {niaBundledModel} from './niaModel';
 import * as DocumentPicker from 'expo-document-picker';
 import {VisemeCue} from './visemes';
 type Motion='Idle'|'Walk'|'Dance'|'Wave';
-type Controller={play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;dispose:()=>void};
+type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;dispose:()=>void};
 export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{speaking?:boolean;visemes?:VisemeCue[]}){
  const [motion,setMotion]=useState<Motion>('Idle');
  const [speaking,setSpeaking]=useState(false);
  const [error,setError]=useState('');
  const [modelUri,setModelUri]=useState<string|null>(null);
  const [loadedName,setLoadedName]=useState('Bundled prototype');
+ const [diagnostics,setDiagnostics]=useState('Waiting for model');
  const controller=useRef<Controller|null>(null);
  const disposed=useRef(false);
  const latestCues=useRef(visemes);
@@ -31,7 +32,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
    if(!/\\.glb$/i.test(file.name))throw new Error('Select a .glb 3D rig file');
    loadGeneration.current++;
    controller.current?.dispose();controller.current=null;
-   setLoadedName(file.name);setModelUri(file.uri);setError('');
+   setLoadedName(file.name);setModelUri(file.uri);setDiagnostics('Loading selected GLB…');setError('');
   }catch(e){setError(String(e));}
  }
  async function onContextCreate(gl:any){
@@ -40,6 +41,8 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
    const mounted=await mountNiaGLB(gl,modelUri||niaBundledModel);
    if(disposed.current||generation!==loadGeneration.current){mounted.dispose();return;}
    controller.current=mounted;
+   const d=mounted.diagnostics;
+   setDiagnostics((d.rigged?'Rigged':'Prototype')+' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
    mounted.play(motion);
    mounted.setSpeaking(latestSpeaking.current);
    if(latestCues.current.length)mounted.setVisemes(latestCues.current);
@@ -50,8 +53,9 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
  return <View style={s.wrap}>
   <GLView key={modelUri||'bundled'} style={s.canvas} onContextCreate={onContextCreate}/>
   <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import Nia appearance rig (.glb)</Text></Pressable>
-  {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Bundled prototype');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
+  {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Bundled prototype');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
   <Text style={s.caption}>Model: {loadedName}</Text>
+  <Text selectable style={s.caption}>Diagnostics: {diagnostics}</Text>
   {error?<Text style={s.error}>Model loading failed: {error}</Text>:null}
   <View style={s.row}>{(['Idle','Walk','Dance','Wave'] as Motion[]).map(v=>
    <Pressable key={v} onPress={()=>select(v)} style={[s.btn,motion===v&&s.selected]}>
