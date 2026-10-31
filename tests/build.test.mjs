@@ -42,3 +42,10 @@ test('notifications can be disabled',()=>{
  const s=read('src/checkIns.ts');
  assert.match(s,/cancelScheduledNotificationAsync/);
 });
+test('backgrounding Nia stops speech and resets animation cues',()=>{
+ const home=read('app/index.tsx');
+ assert.match(home,/AppState.addEventListener/);
+ assert.match(home,/state!=='active'/);
+ assert.match(home,/void Speech.stop\(\)/);
+ assert.match(home,/setVisemeCues\(\[\]\)/);
+});
