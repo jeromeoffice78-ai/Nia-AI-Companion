@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useState,useRef} from 'react';
 import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert,Share} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -34,6 +34,7 @@ export default function Home(){
  const [memoryDraft,setMemoryDraft]=useState('');
  const [assistantMode,setAssistantMode]=useState<'companion'|'research'|'business'>('companion');
  const [cameraPermission,requestCameraPermission]=useCameraPermissions();
+ const cameraRef=useRef<CameraView>(null);
  useEffect(()=>()=>{void Speech.stop();},[]);
  useEffect(()=>{
   AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model','nia_flirty']).then(entries=>{
@@ -99,9 +100,10 @@ export default function Home(){
   if(!endpoint||!token){Alert.alert('Connect GroqCloud first','Set the GroqCloud endpoint and your private API key in AI connection settings.');return;}
   const permission=await ImagePicker.requestCameraPermissionsAsync();
   if(!permission.granted){Alert.alert('Camera access required','Enable camera permission to take a photo for Nia to interpret.');return;}
-  const capture=await ImagePicker.launchCameraAsync({cameraType:ImagePicker.CameraType.front,base64:true,quality:0.45,allowsEditing:false});
-  if(capture.canceled||!capture.assets[0]?.base64)return;
-  const photo=capture.assets[0];
+  let photo:{base64?:string|null;mimeType?:string|null}|undefined;
+  if(cameraVisible&&cameraRef.current){photo=await cameraRef.current.takePictureAsync({base64:true,quality:0.45,skipProcessing:false});}
+  else{const capture=await ImagePicker.launchCameraAsync({cameraType:ImagePicker.CameraType.front,base64:true,quality:0.45,allowsEditing:false});if(capture.canceled)return;photo=capture.assets[0];}
+  if(!photo?.base64)return;
   setVisionBusy(true);
   try{
    const visionModel='meta-llama/llama-4-scout-17b-16e-instruct';
@@ -145,7 +147,7 @@ export default function Home(){
   {show3d?<Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>:<NiaAvatar/>}
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
-  {cameraVisible?<View><CameraView style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
+  {cameraVisible?<View><CameraView ref={cameraRef} style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
   <Pressable style={s.button} disabled={visionBusy||busy} onPress={lookAtScene}><Text style={s.white}>{visionBusy?'Nia is looking…':'Take photo and ask Nia what she sees'}</Text></Pressable>
   <Text style={s.note}>Assistant mode: {assistantMode}</Text>
   <View style={{flexDirection:'row',gap:6}}>{(['companion','research','business'] as const).map(mode=><Pressable key={mode} style={[s.secondary,{flex:1,backgroundColor:assistantMode===mode?'#704566':'transparent'}]} onPress={()=>changeAssistantMode(mode)}><Text style={s.white}>{mode}</Text></Pressable>)}</View>
