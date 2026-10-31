@@ -21,3 +21,10 @@ test('overlay is draggable, dismissible, and does not activate camera or microph
  assert.match(native,/height\/2/);
  assert.doesNotMatch(native,/CameraManager|AudioRecord|MediaRecorder/);
 });
+
+test('tablet layout scrolls when half-screen avatar consumes available height',()=>{
+ const screen=read('app/index.tsx');
+ assert.match(screen,/contentContainerStyle=\{s\.screenContent\}/);
+ assert.match(screen,/keyboardShouldPersistTaps="handled"/);
+ assert.match(screen,/<\/ScrollView>;/);
+});
