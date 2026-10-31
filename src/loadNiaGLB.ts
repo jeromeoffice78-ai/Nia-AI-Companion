@@ -7,7 +7,7 @@ import {VisemeCue,visemeAt,mouthOpenForViseme,validateVisemes} from './visemes';
  * Uses the bundled animated GLB asset from src/niaModel.ts.
  * This model has Idle and Dance animations but no skeletal rig.
  */
-export async function mountNiaGLB(gl:any, assetModule:number) {
+export async function mountNiaGLB(gl:any, assetModule:number|string) {
  const renderer=new Renderer({gl});
  renderer.setSize(gl.drawingBufferWidth,gl.drawingBufferHeight);
  const scene=new THREE.Scene();
@@ -28,6 +28,9 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
  const leftLeg=model.getObjectByName('leftLeg');
  const rightLeg=model.getObjectByName('rightLeg');
  const head=model.getObjectByName('head');
+ const rigged=!!model.getObjectByName('Hips')&&!!model.getObjectByName('Head');
+ const faceMeshes:THREE.Mesh[]=[];
+ model.traverse(o=>{if(o instanceof THREE.Mesh&&o.morphTargetDictionary)faceMeshes.push(o);});
  // Convert independently positioned meshes into pivoted joints.
  // A pivot at the shoulder/hip rotates the entire limb around its attachment,
  // rather than spinning an ellipsoid around its own centre.
@@ -42,11 +45,11 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
   return pivot;
  }
  model.updateMatrixWorld(true);
- const leftShoulder=joint(leftArm,new THREE.Vector3(-0.29,1.52,0));
- const rightShoulder=joint(rightArm,new THREE.Vector3(0.29,1.52,0));
- const leftHip=joint(leftLeg,new THREE.Vector3(-0.15,0.88,0));
- const rightHip=joint(rightLeg,new THREE.Vector3(0.15,0.88,0));
- const neck=joint(head,new THREE.Vector3(0,1.69,0));
+ const leftShoulder=rigged?undefined:joint(leftArm,new THREE.Vector3(-0.29,1.52,0));
+ const rightShoulder=rigged?undefined:joint(rightArm,new THREE.Vector3(0.29,1.52,0));
+ const leftHip=rigged?undefined:joint(leftLeg,new THREE.Vector3(-0.15,0.88,0));
+ const rightHip=rigged?undefined:joint(rightLeg,new THREE.Vector3(0.15,0.88,0));
+ const neck=rigged?undefined:joint(head,new THREE.Vector3(0,1.69,0));
  let selected:'Idle'|'Dance'|'Wave'='Idle';
  let blend=0;
  let waveBlend=0;
@@ -59,7 +62,7 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
  // Face details are parented to the head mesh, so they follow head motion.
  const eyes:THREE.Mesh[]=[];
  let mouth:THREE.Mesh|null=null;
- if(head){
+ if(head&&!rigged){
   const eyeMaterial=new THREE.MeshStandardMaterial({color:0x191018});
   const mouthMaterial=new THREE.MeshStandardMaterial({color:0x5a2331});
   for(const x of [-0.055,0.055]){
@@ -77,7 +80,8 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
  let activeAction:THREE.AnimationAction|null=null;
  function play(name:'Idle'|'Dance'|'Wave'){
   selected=name;
-  const clip=clips.find(c=>c.name===(name==='Wave'?'Idle':name));
+  const clip=clips.find(c=>c.name===(rigged?name:(name==='Wave'?'Idle':name)));
+  if(rigged&&name==='Wave'&&!clip)return false;
   if(!clip)return false;
   const action=mixer.clipAction(clip);
   activeAction?.fadeOut(0.25);
@@ -114,13 +118,27 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
   speechLevel+=(Number(speaking)-speechLevel)*Math.min(1,delta*9);
   const visemeLevel=cues.length?mouthOpenForViseme(visemeAt(cues,(t-cueStartedAt)*1000)):null;
   if(mouth)mouth.scale.y=0.10+speechLevel*0.19*(visemeLevel===null?(0.25+0.75*Math.abs(Math.sin(t*12))):visemeLevel);
+  // Prefer true GLB facial blendshapes when the rig provides them.
+  const viseme= cues.length?visemeAt(cues,(t-cueStartedAt)*1000):'sil';
+  const mapped:Record<string,string>={PP:'viseme_MBP',FF:'viseme_FV',aa:'viseme_AA',E:'viseme_EE',ih:'viseme_EE',oh:'viseme_OH',ou:'viseme_OH',nn:'viseme_L',DD:'viseme_L',RR:'viseme_OH'};
+  const target=mapped[viseme]||'viseme_AA';
+  for(const mesh of faceMeshes){
+   const dictionary=mesh.morphTargetDictionary||{};
+   const influences=mesh.morphTargetInfluences;
+   if(!influences)continue;
+   for(const [key,index] of Object.entries(dictionary)){
+    const isBlink=key==='blinkLeft'||key==='blinkRight';
+    const wanted=isBlink?blink:(speaking&&key===target?(visemeLevel??0.4):0);
+    influences[index]+=(wanted-influences[index])*Math.min(1,delta*18);
+   }
+  }
   renderer.render(scene,camera);
   gl.endFrameEXP();
  }
  tick();
  return {play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
   active=false;cancelAnimationFrame(frame);mixer.stopAllAction();
-  scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();}});
+  scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();const mats=Array.isArray(o.material)?o.material:[o.material];for(const mat of mats)mat.dispose();}});
   renderer.dispose();
  }};
 }
