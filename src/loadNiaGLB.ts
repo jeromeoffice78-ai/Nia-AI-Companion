@@ -72,7 +72,8 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
   if(leftLeg)leftLeg.rotation.x=(dance?0.28:0.02)*Math.sin(t*3);
   if(rightLeg)rightLeg.rotation.x=-(dance?0.28:0.02)*Math.sin(t*3);
   if(head)head.rotation.y=0.09*Math.sin(t*0.9);
-  const blink=Math.pow(Math.max(0,Math.cos(t*1.2)),32);
+  // Narrow periodic eyelid closure, rather than a prolonged squint.
+  const blink=Math.pow(Math.max(0,Math.cos(t*2.1)),80);
   for(const eye of eyes)eye.scale.y=Math.max(0.008,0.09*(1-blink));
   if(mouth)mouth.scale.y=speaking?0.10+0.17*Math.abs(Math.sin(t*13)):0.10;
   renderer.render(scene,camera);
