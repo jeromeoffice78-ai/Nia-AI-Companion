@@ -55,3 +55,11 @@ test('bundled GLB contains playable Idle and Dance clips',()=>{
   }
  }
 });
+
+test('avatar renderer animates individual limbs and head',()=>{
+ const renderer=read('src/loadNiaGLB.ts');
+ for(const part of ['leftArm','rightArm','leftLeg','rightLeg','head']){
+  assert.match(renderer,new RegExp("getObjectByName\\('"+part+"'\\)"));
+ }
+ assert.match(renderer,/selected==='Dance'/);
+});
