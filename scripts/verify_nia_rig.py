@@ -17,11 +17,21 @@ nodes = data['nodes']
 names = {node.get('name') for node in nodes}
 assert {'Hips', 'Head', 'Jaw', 'LeftEye', 'RightEye'} <= names, 'Missing skeletal bones'
 assert data.get('skins') and len(data['skins'][0]['joints']) >= 25, 'Missing skin'
+assert any('skin' in node and 'mesh' in node for node in nodes), 'No skinned mesh node'
+assert all(0 <= joint < len(nodes) for skin in data['skins'] for joint in skin['joints']), 'Invalid joint index'
 clips = {a.get('name') for a in data.get('animations', [])}
 assert {'Idle', 'Walk', 'Dance', 'Wave'} <= clips, 'Missing animation clips'
+for animation in data['animations']:
+    assert animation.get('channels') and animation.get('samplers'), 'Empty animation'
+    for channel in animation['channels']:
+        assert channel['sampler'] < len(animation['samplers']), 'Invalid animation sampler'
+        assert channel['target'].get('node', -1) < len(nodes) and channel['target'].get('node', -1) >= 0, 'Invalid animation node'
 targets = set()
 for mesh in data.get('meshes', []):
-    targets.update(mesh.get('extras', {}).get('targetNames', []))
+    names = mesh.get('extras', {}).get('targetNames', [])
+    if names:
+        assert all(len(primitive.get('targets', [])) == len(names) for primitive in mesh.get('primitives', [])), 'Morph target count mismatch'
+    targets.update(names)
 assert {'viseme_AA', 'viseme_EE', 'viseme_OH', 'viseme_FV',
         'viseme_MBP', 'viseme_L', 'blinkLeft', 'blinkRight'} <= targets, 'Missing facial morphs'
 print(f'PASS: {path.name} / {len(data["skins"][0]["joints"])} bones / '
