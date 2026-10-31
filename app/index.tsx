@@ -15,7 +15,7 @@ export default function Home(){
  const [draft,setDraft]=useState('');
  const [endpoint,setEndpoint]=useState('');
  const [token,setToken]=useState('');
- const [model,setModel]=useState('local-model');
+ const [model,setModel]=useState('llama-3.3-70b-versatile');
  const [phone,setPhone]=useState('');
  const [question,setQuestion]=useState('');
  const [show3d,setShow3d]=useState(false);
@@ -30,7 +30,7 @@ export default function Home(){
   AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model']).then(entries=>{
    const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
    setEndpoint(entries[1][1]||'');
-   setModel(entries[2][1]||'local-model');
+   setModel(entries[2][1]||'llama-3.3-70b-versatile');
   }).catch(()=>{});
   checkInsEnabled().then(setCheckins).catch(()=>{});
   SecureStore.getItemAsync('nia_api_token').then(v=>setToken(v||'')).catch(()=>{});
@@ -40,7 +40,7 @@ export default function Home(){
   if(e&&!/^https:\/\//i.test(e)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(e)){
    Alert.alert('Secure connection required','Use HTTPS for remote servers.');return;
   }
-  await AsyncStorage.multiSet([['nia_endpoint',e],['nia_model',model.trim()||'local-model']]);
+  await AsyncStorage.multiSet([['nia_endpoint',e],['nia_model',model.trim()||'llama-3.3-70b-versatile']]);
   await SecureStore.setItemAsync('nia_api_token',token);
   setSetup(false);
  }
@@ -94,9 +94,11 @@ export default function Home(){
   <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
+    <Pressable style={s.secondary} onPress={()=>{setEndpoint('https://api.groq.com/openai/v1/chat/completions');setModel('llama-3.3-70b-versatile');}}><Text style={s.white}>Use GroqCloud (recommended)</Text></Pressable>
+    <Text style={s.note}>GroqCloud: select this preset, enter your API key below, then save. The key is stored in this device’s secure storage, not in GitHub. For production distribution, use a server-side proxy so the provider key is never shipped to clients.</Text>
     <TextInput value={endpoint} onChangeText={setEndpoint} style={s.input} autoCapitalize="none" placeholder="https://server/v1/chat/completions" placeholderTextColor="#bbb"/>
     <TextInput value={model} onChangeText={setModel} style={s.input} autoCapitalize="none" placeholder="Model name" placeholderTextColor="#bbb"/>
-    <TextInput value={token} onChangeText={setToken} style={s.input} secureTextEntry placeholder="Optional API token" placeholderTextColor="#bbb"/>
+    <TextInput value={token} onChangeText={setToken} style={s.input} secureTextEntry placeholder="GroqCloud API key (private)" placeholderTextColor="#bbb"/>
     <Pressable onPress={saveConfig} style={s.button}><Text style={s.white}>Save settings</Text></Pressable>
     <Pressable onPress={()=>setSpeak(!speak)} style={s.secondary}><Text style={s.white}>Spoken replies: {speak?'On':'Off'}</Text></Pressable>
     <Pressable onPress={toggleCheckins} style={s.secondary}><Text style={s.white}>Daytime check-ins: {checkins?'On':'Off'}</Text></Pressable>
