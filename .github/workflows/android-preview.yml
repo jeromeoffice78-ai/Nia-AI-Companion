@@ -37,6 +37,16 @@ jobs:
       - name: Build preview APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nia-build-diagnostics
+          path: |
+            android/app/build/reports/
+            android/build/reports/
+            npm-debug.log
+          if-no-files-found: ignore
       - name: Upload preview APK
         uses: actions/upload-artifact@v4
         with:
