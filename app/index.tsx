@@ -11,7 +11,7 @@ import {VisemeCue,validateVisemes} from '../src/visemes';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
-import {showNiaOverlay,hideNiaOverlay} from '../src/niaOverlay';
+
 type Message={role:'user'|'assistant';content:string};
 const MEMORY_KEY='nia_messages_v2';
 export default function Home(){
@@ -164,17 +164,14 @@ export default function Home(){
  async function clearHistory(){await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
  return <ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
-  <Pressable style={s.secondary} onPress={async()=>{try{const result=await showNiaOverlay();if(result==='permission-required')Alert.alert('Overlay permission','Enable Display over other apps for Nia, return to the app, then tap this button again.');}catch(e){Alert.alert('Floating Nia unavailable',String(e));}}}><Text style={s.white}>Show floating Nia over other apps</Text></Pressable>
-  <Pressable style={s.secondary} onPress={async()=>{try{await hideNiaOverlay();}catch(e){Alert.alert('Floating Nia unavailable',String(e));}}}><Text style={s.white}>Close floating Nia</Text></Pressable>
-  <Pressable style={s.secondary} onPress={()=>setShow3d(!show3d)}><Text style={s.white}>{show3d?'Show original photo':'Show animated 3D prototype'}</Text></Pressable>
-  {show3d?<Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>:<NiaAvatar/>}
+  <Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
   {cameraVisible?<View><CameraView ref={cameraRef} style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
   <Pressable style={s.button} disabled={visionBusy||busy} onPress={lookAtScene}><Text style={s.white}>{visionBusy?'Nia is looking…':'Take photo and ask Nia what she sees'}</Text></Pressable>
   <Text style={s.note}>Assistant mode: {assistantMode}</Text>
   <View style={{flexDirection:'row',gap:6}}>{(['companion','research','business'] as const).map(mode=><Pressable key={mode} style={[s.secondary,{flex:1,backgroundColor:assistantMode===mode?'#704566':'transparent'}]} onPress={()=>changeAssistantMode(mode)}><Text style={s.white}>{mode}</Text></Pressable>)}</View>
-  <Text style={s.note}>AI companion · {(useGateway?gatewayUrl:endpoint)?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
+  <Text style={s.note}>AI companion · {(useGateway?gatewayUrl:endpoint)?'AI endpoint configured':'AI connection required'} · production rig required for release</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
     <Text style={s.note}>Nia secure gateway (optional; server must be deployed separately)</Text>
