@@ -22,8 +22,15 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
  scene.add(model);
  const clips:THREE.AnimationClip[]=loaded.animations||[];
  const mixer=new THREE.AnimationMixer(model);
+ const leftArm=model.getObjectByName('leftArm');
+ const rightArm=model.getObjectByName('rightArm');
+ const leftLeg=model.getObjectByName('leftLeg');
+ const rightLeg=model.getObjectByName('rightLeg');
+ const head=model.getObjectByName('head');
+ let selected:'Idle'|'Dance'='Idle';
  let activeAction:THREE.AnimationAction|null=null;
  function play(name:'Idle'|'Dance'){
+  selected=name;
   const clip=clips.find(c=>c.name===name);
   if(!clip)return false;
   const action=mixer.clipAction(clip);
@@ -39,6 +46,13 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
   if(!active)return;
   frame=requestAnimationFrame(tick);
   mixer.update(clock.getDelta());
+  const t=clock.elapsedTime;
+  const dance=selected==='Dance';
+  if(leftArm)leftArm.rotation.z=(dance?0.6:0.07)*Math.sin(t*(dance?4:1.1));
+  if(rightArm)rightArm.rotation.z=-(dance?0.6:0.07)*Math.sin(t*(dance?4:1.1)+0.7);
+  if(leftLeg)leftLeg.rotation.x=(dance?0.28:0.02)*Math.sin(t*3);
+  if(rightLeg)rightLeg.rotation.x=-(dance?0.28:0.02)*Math.sin(t*3);
+  if(head)head.rotation.y=0.09*Math.sin(t*0.9);
   renderer.render(scene,camera);
   gl.endFrameEXP();
  }
