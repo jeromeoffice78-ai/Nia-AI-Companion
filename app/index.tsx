@@ -3,6 +3,7 @@ import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert} from 'react-n
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
+import {CameraView,useCameraPermissions} from 'expo-camera';
 import NiaAvatar from '../src/NiaAvatar';
 import Avatar3D from '../src/Avatar3D';
 import {VisemeCue,validateVisemes} from '../src/visemes';
@@ -25,12 +26,16 @@ export default function Home(){
  const [avatarSpeaking,setAvatarSpeaking]=useState(false);
  const [visemeCues,setVisemeCues]=useState<VisemeCue[]>([]);
  const [checkins,setCheckins]=useState(false);
+ const [flirty,setFlirty]=useState(true);
+ const [cameraVisible,setCameraVisible]=useState(false);
+ const [cameraPermission,requestCameraPermission]=useCameraPermissions();
  useEffect(()=>()=>{void Speech.stop();},[]);
  useEffect(()=>{
-  AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model']).then(entries=>{
+  AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model','nia_flirty']).then(entries=>{
    const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
    setEndpoint(entries[1][1]||'');
    setModel(entries[2][1]||'llama-3.3-70b-versatile');
+   setFlirty(entries[3][1]!=='false');
   }).catch(()=>{});
   checkInsEnabled().then(setCheckins).catch(()=>{});
   SecureStore.getItemAsync('nia_api_token').then(v=>setToken(v||'')).catch(()=>{});
@@ -40,7 +45,7 @@ export default function Home(){
   if(e&&!/^https:\/\//i.test(e)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(e)){
    Alert.alert('Secure connection required','Use HTTPS for remote servers.');return;
   }
-  await AsyncStorage.multiSet([['nia_endpoint',e],['nia_model',model.trim()||'llama-3.3-70b-versatile']]);
+  await AsyncStorage.multiSet([['nia_endpoint',e],['nia_model',model.trim()||'llama-3.3-70b-versatile'],['nia_flirty',String(flirty)]]);
   await SecureStore.setItemAsync('nia_api_token',token);
   setSetup(false);
  }
@@ -55,7 +60,7 @@ export default function Home(){
    const response=await fetch(endpoint,{
     method:'POST',
     headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},
-    body:JSON.stringify({model:model.trim()||'local-model',messages:[{role:'system',content:'You are Nia, an AI companion. Be warm, playful, considerate, and clear that you are AI. Do not claim to be conscious or to have human feelings. Respect the user’s boundaries.'},...history],stream:false})
+    body:JSON.stringify({model:model.trim()||'local-model',messages:[{role:'system',content:'You are Nia, an adult AI companion. Be warm, considerate, playful, and clear that you are AI, not a human partner. '+(flirty?'Use charming, lighthearted, consensual flirting and occasional sweet compliments when appropriate. Follow the user’s lead and stop flirting if asked. ':'Keep your tone friendly and non-flirtatious. ')+'Never claim you can see or hear the user unless the app explicitly supplies authorized camera or microphone input. Respect boundaries and privacy.'},...history],stream:false})
    });
    if(!response.ok)throw new Error('HTTP '+response.status);
    const data=await response.json();
@@ -91,6 +96,9 @@ export default function Home(){
   <Text style={s.title}>Nia</Text>
   <Pressable style={s.secondary} onPress={()=>setShow3d(!show3d)}><Text style={s.white}>{show3d?'Show original photo':'Show animated 3D prototype'}</Text></Pressable>
   {show3d?<Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>:<NiaAvatar/>}
+  <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
+  <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
+  {cameraVisible?<View><CameraView style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Nia cannot interpret the video yet. Camera stops when this preview is closed; no background recording.</Text></View>:null}
   <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
