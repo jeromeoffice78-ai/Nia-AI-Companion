@@ -50,7 +50,7 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  const leftHip=rigged?undefined:joint(leftLeg,new THREE.Vector3(-0.15,0.88,0));
  const rightHip=rigged?undefined:joint(rightLeg,new THREE.Vector3(0.15,0.88,0));
  const neck=rigged?undefined:joint(head,new THREE.Vector3(0,1.69,0));
- let selected:'Idle'|'Dance'|'Wave'='Idle';
+ let selected:'Idle'|'Walk'|'Dance'|'Wave'='Idle';
  let blend=0;
  let waveBlend=0;
  let speechLevel=0;
@@ -78,7 +78,7 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   head.add(mouth);
  }
  let activeAction:THREE.AnimationAction|null=null;
- function play(name:'Idle'|'Dance'|'Wave'){
+ function play(name:'Idle'|'Walk'|'Dance'|'Wave'){
   selected=name;
   const clip=clips.find(c=>c.name===(rigged?name:(name==='Wave'?'Idle':name)));
   if(rigged&&name==='Wave'&&!clip)return false;
