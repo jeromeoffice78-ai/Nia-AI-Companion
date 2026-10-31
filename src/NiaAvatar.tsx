@@ -1,10 +1,12 @@
 import React,{useEffect,useState} from 'react';
-import {View,Text,Image,Pressable,StyleSheet,Alert} from 'react-native';
+import {View,Text,Image,Pressable,StyleSheet,Alert,useWindowDimensions} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 const KEY='nia_original_avatar_uri';
 export default function NiaAvatar(){
  const [uri,setUri]=useState<string|null>(null);
+ const {height}=useWindowDimensions();
+ const avatarHeight=Math.max(240,Math.round(height*0.5));
  useEffect(()=>{AsyncStorage.getItem(KEY).then(setUri).catch(()=>{});},[]);
  async function choose(){
   const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:['images'],allowsEditing:false,quality:1});
@@ -14,8 +16,8 @@ export default function NiaAvatar(){
   catch(e){Alert.alert('Could not save photo',String(e));}
  }
  return <View style={styles.container}>
-  {uri?<Image source={{uri}} style={styles.photo} resizeMode="contain" accessibilityLabel="User-selected Nia character photo"/>:
-  <View style={styles.empty}><Text style={styles.label}>Nia's original character photo has not been added to this installation.</Text></View>}
+  {uri?<Image source={{uri}} style={[styles.photo,{height:avatarHeight}]} resizeMode="contain" accessibilityLabel="User-selected Nia character photo"/>:
+  <View style={[styles.empty,{height:avatarHeight}]}><Text style={styles.label}>Nia's original character photo has not been added to this installation.</Text></View>}
   <Pressable style={styles.button} onPress={choose}><Text style={styles.label}>{uri?'Change original photo':'Select original Nia photo'}</Text></Pressable>
   <Text style={styles.caption}>This displays the selected original image. A rigged, animated 3D avatar is not installed yet.</Text>
  </View>;
