@@ -10,12 +10,16 @@ import Avatar3D from '../src/Avatar3D';
 import {VisemeCue,validateVisemes} from '../src/visemes';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
+import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
 type Message={role:'user'|'assistant';content:string};
 const MEMORY_KEY='nia_messages_v2';
 export default function Home(){
  const [messages,setMessages]=useState<Message[]>([]);
  const [draft,setDraft]=useState('');
  const [endpoint,setEndpoint]=useState('');
+ const [gatewayUrl,setGatewayUrl]=useState('');
+ const [gatewayToken,setGatewayToken]=useState('');
+ const [useGateway,setUseGateway]=useState(false);
  const [token,setToken]=useState('');
  const [model,setModel]=useState('llama-3.3-70b-versatile');
  const [phone,setPhone]=useState('');
@@ -45,6 +49,8 @@ export default function Home(){
   }).catch(()=>{});
   AsyncStorage.getItem('nia_memory_notes').then(v=>{if(v){setMemoryNotes(v);setMemoryDraft(v);}}).catch(()=>{});
   AsyncStorage.getItem('nia_assistant_mode').then(v=>{if(v==='research'||v==='business'||v==='companion')setAssistantMode(v);}).catch(()=>{});
+  AsyncStorage.multiGet(['nia_gateway_url','nia_gateway_enabled']).then(v=>{setGatewayUrl(v[0][1]||'');setUseGateway(v[1][1]==='true');}).catch(()=>{});
+  SecureStore.getItemAsync('nia_gateway_token').then(v=>setGatewayToken(v||'')).catch(()=>{});
   checkInsEnabled().then(setCheckins).catch(()=>{});
   SecureStore.getItemAsync('nia_api_token').then(v=>setToken(v||'')).catch(()=>{});
  },[]);
@@ -62,9 +68,17 @@ export default function Home(){
   const history:Message[]=[...messages,{role:'user',content}];
   setMessages(history);setDraft('');
   await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(history));
-  if(!endpoint){Alert.alert('AI not connected','Configure an OpenAI-compatible chat endpoint in Settings. Your message has been saved.');return;}
+  if(!useGateway&&!endpoint){Alert.alert('AI not connected','Configure an OpenAI-compatible chat endpoint in Settings. Your message has been saved.');return;}
   setBusy(true);
   try{
+   if(useGateway){
+    const result=await chatWithGateway({baseUrl:gatewayUrl,clientToken:gatewayToken},history,assistantMode,flirty);
+    const answer=result.answer;
+    const updated:Message[]=[...history,{role:'assistant',content:answer}];
+    setMessages(updated);await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));
+    if(speak){await Speech.stop();setAvatarSpeaking(true);Speech.speak(answer,{language:'en-US',onDone:()=>setAvatarSpeaking(false),onStopped:()=>setAvatarSpeaking(false),onError:()=>setAvatarSpeaking(false)});}
+    return;
+   }
    const response=await fetch(endpoint,{
     method:'POST',
     headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},
@@ -151,9 +165,14 @@ export default function Home(){
   <Pressable style={s.button} disabled={visionBusy||busy} onPress={lookAtScene}><Text style={s.white}>{visionBusy?'Nia is looking…':'Take photo and ask Nia what she sees'}</Text></Pressable>
   <Text style={s.note}>Assistant mode: {assistantMode}</Text>
   <View style={{flexDirection:'row',gap:6}}>{(['companion','research','business'] as const).map(mode=><Pressable key={mode} style={[s.secondary,{flex:1,backgroundColor:assistantMode===mode?'#704566':'transparent'}]} onPress={()=>changeAssistantMode(mode)}><Text style={s.white}>{mode}</Text></Pressable>)}</View>
-  <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
+  <Text style={s.note}>AI companion · {(useGateway?gatewayUrl:endpoint)?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
+    <Text style={s.note}>Nia secure gateway (optional; server must be deployed separately)</Text>
+    <TextInput value={gatewayUrl} onChangeText={setGatewayUrl} style={s.input} autoCapitalize="none" placeholder="https://your-nia-api.example" placeholderTextColor="#bbb"/>
+    <TextInput value={gatewayToken} onChangeText={setGatewayToken} style={s.input} secureTextEntry placeholder="Gateway client access token" placeholderTextColor="#bbb"/>
+    <Pressable style={s.secondary} onPress={async()=>{try{const url=normalizeGatewayUrl(gatewayUrl);await AsyncStorage.setItem('nia_gateway_url',url);await SecureStore.setItemAsync('nia_gateway_token',gatewayToken);await AsyncStorage.setItem('nia_gateway_enabled',String(!useGateway));setGatewayUrl(url);setUseGateway(!useGateway);}catch(e){Alert.alert('Gateway configuration',String(e));}}}><Text style={s.white}>Secure gateway: {useGateway?'Enabled (tap to disable)':'Disabled (tap to enable)'}</Text></Pressable>
+    <Pressable style={s.secondary} onPress={async()=>{try{Alert.alert('Gateway diagnostics',(await checkGateway(gatewayUrl))?'API health check passed':'API health check failed');}catch(e){Alert.alert('Gateway diagnostics',String(e));}}}><Text style={s.white}>Test gateway connection</Text></Pressable>
     <Pressable style={s.secondary} onPress={()=>{setEndpoint('https://api.groq.com/openai/v1/chat/completions');setModel('llama-3.3-70b-versatile');}}><Text style={s.white}>Use GroqCloud (recommended)</Text></Pressable>
     <Text style={s.note}>GroqCloud: select this preset, enter your API key below, then save. The key is stored in this device’s secure storage, not in GitHub. For production distribution, use a server-side proxy so the provider key is never shipped to clients.</Text>
     <TextInput value={endpoint} onChangeText={setEndpoint} style={s.input} autoCapitalize="none" placeholder="https://server/v1/chat/completions" placeholderTextColor="#bbb"/>
