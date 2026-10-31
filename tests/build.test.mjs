@@ -68,19 +68,19 @@ test('spoken AI replies control avatar speaking state',()=>{
  const home=read('app/index.tsx');
  const avatar=read('src/Avatar3D.tsx');
  assert.match(home,/setAvatarSpeaking\(true\)/);
- assert.match(home,/onDone:\(\)=>setAvatarSpeaking\(false\)/);
- assert.match(home,/<Avatar3D speaking=\{avatarSpeaking\}/);
+ assert.match(home,/onDone:\(\)=>\{setAvatarSpeaking\(false\)/);
+ assert.match(home,/<Avatar3D speaking=\{avatarSpeaking\} visemes=\{visemeCues\}/);
  assert.match(avatar,/externalSpeaking\|\|speaking/);
 });
 
 test('animation rig has shoulder and hip pivots and Wave mode',()=>{
  const source=read('src/loadNiaGLB.ts');
  const avatar=read('src/Avatar3D.tsx');
- assert.match(source,/leftShoulder=joint/);
- assert.match(source,/rightShoulder=joint/);
- assert.match(source,/leftHip=joint/);
- assert.match(source,/rightHip=joint/);
- assert.match(source,/neck=joint/);
+ assert.match(source,/leftShoulder=rigged\?undefined:joint/);
+ assert.match(source,/rightShoulder=rigged\?undefined:joint/);
+ assert.match(source,/leftHip=rigged\?undefined:joint/);
+ assert.match(source,/rightHip=rigged\?undefined:joint/);
+ assert.match(source,/neck=rigged\?undefined:joint/);
  assert.match(source,/waveBlend/);
  assert.match(avatar,/'Wave'/);
 });
