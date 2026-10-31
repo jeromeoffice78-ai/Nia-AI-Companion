@@ -11,6 +11,7 @@ import {VisemeCue,validateVisemes} from '../src/visemes';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
+import {showNiaOverlay,hideNiaOverlay} from '../src/niaOverlay';
 type Message={role:'user'|'assistant';content:string};
 const MEMORY_KEY='nia_messages_v2';
 export default function Home(){
@@ -163,6 +164,8 @@ export default function Home(){
  async function clearHistory(){await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
  return <View style={s.screen}>
   <Text style={s.title}>Nia</Text>
+  <Pressable style={s.secondary} onPress={async()=>{try{const result=await showNiaOverlay();if(result==='permission-required')Alert.alert('Overlay permission','Enable Display over other apps for Nia, return to the app, then tap this button again.');}catch(e){Alert.alert('Floating Nia unavailable',String(e));}}}><Text style={s.white}>Show floating Nia over other apps</Text></Pressable>
+  <Pressable style={s.secondary} onPress={async()=>{try{await hideNiaOverlay();}catch(e){Alert.alert('Floating Nia unavailable',String(e));}}}><Text style={s.white}>Close floating Nia</Text></Pressable>
   <Pressable style={s.secondary} onPress={()=>setShow3d(!show3d)}><Text style={s.white}>{show3d?'Show original photo':'Show animated 3D prototype'}</Text></Pressable>
   {show3d?<Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>:<NiaAvatar/>}
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
