@@ -4,7 +4,6 @@ import {GLView} from 'expo-gl';
 import {mountNiaGLB} from './loadNiaGLB';
 import {niaBundledModel} from './niaModel';
 import * as DocumentPicker from 'expo-document-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {VisemeCue} from './visemes';
 type Motion='Idle'|'Walk'|'Dance'|'Wave';
 type Controller={play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;dispose:()=>void};
@@ -16,7 +15,8 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
  const [loadedName,setLoadedName]=useState('Bundled prototype');
  const controller=useRef<Controller|null>(null);
  const disposed=useRef(false);
- useEffect(()=>{disposed.current=false;return()=>{disposed.current=true;controller.current?.dispose();controller.current=null}},[]);
+ const loadGeneration=useRef(0);
+ useEffect(()=>{disposed.current=false;return()=>{disposed.current=true;loadGeneration.current++;controller.current?.dispose();controller.current=null}},[]);
  useEffect(()=>{controller.current?.setSpeaking(externalSpeaking||speaking);},[externalSpeaking,speaking]);
  useEffect(()=>{if(visemes.length)controller.current?.setVisemes(visemes);},[visemes]);
  async function chooseRig(){
@@ -25,21 +25,23 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
    if(selected.canceled)return;
    const file=selected.assets[0];
    if(!/\\.glb$/i.test(file.name))throw new Error('Select a .glb 3D rig file');
+   loadGeneration.current++;
    controller.current?.dispose();controller.current=null;
    setLoadedName(file.name);setModelUri(file.uri);setError('');
   }catch(e){setError(String(e));}
  }
  async function onContextCreate(gl:any){
+  const generation=++loadGeneration.current;
   try{
    const mounted=await mountNiaGLB(gl,modelUri||niaBundledModel);
-   if(disposed.current){mounted.dispose();return;}
+   if(disposed.current||generation!==loadGeneration.current){mounted.dispose();return;}
    controller.current=mounted;
    mounted.play(motion);
    mounted.setSpeaking(externalSpeaking||speaking);
    if(visemes.length)mounted.setVisemes(visemes);
-  }catch(e){setError(String(e));}
+  }catch(e){if(!disposed.current&&generation===loadGeneration.current)setError(String(e));}
  }
- function select(next:Motion){setMotion(next);controller.current?.play(next);}
+ function select(next:Motion){if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}setError('');setMotion(next);}
  function toggleSpeaking(){setSpeaking(v=>{controller.current?.setSpeaking(!v);return !v;});}
  return <View style={s.wrap}>
   <GLView key={modelUri||'bundled'} style={s.canvas} onContextCreate={onContextCreate}/>
