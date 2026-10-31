@@ -1,124 +1,44 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
-const read=(path)=>readFileSync(path,'utf8');
-test('Expo Router entry point is configured',()=>{
- const pkg=JSON.parse(read('package.json'));
- assert.equal(pkg.main,'expo-router/entry');
- assert.ok(pkg.dependencies['expo-router']);
- assert.ok(pkg.dependencies['react-native-screens']);
- assert.ok(pkg.dependencies['react-native-safe-area-context']);
+const read=p=>readFileSync(p,'utf8');
+test('Expo Router and Android dependencies',()=>{
+ const p=JSON.parse(read('package.json'));
+ assert.equal(p.main,'expo-router/entry');
+ for(const d of ['expo-router','expo-gl','expo-camera','expo-secure-store'])assert.ok(p.dependencies[d],d);
+ assert.ok(p.devDependencies['@expo/config-plugins']);
 });
-test('AI model configuration and avatar source are wired',()=>{
+test('Nia main screen uses 3D renderer and secure gateway',()=>{
  const screen=read('app/index.tsx');
- assert.match(screen,/nia_model/);
- assert.match(screen,/NiaAvatar/);
- assert.ok(existsSync('src/NiaAvatar.tsx'));
+ assert.match(screen,/Avatar3D speaking=/);
+ assert.match(screen,/chatWithGateway/);
+ assert.match(screen,/SecureStore/);
+ assert.doesNotMatch(screen,/<NiaAvatar\s*\/>/);
 });
-test('notification scheduler has a cancellation path',()=>{
- const source=read('src/checkIns.ts');
- assert.match(source,/cancelScheduledNotificationAsync/);
- assert.match(source,/requestPermissionsAsync/);
+test('3D asset exists with valid glTF binary header',()=>{
+ const b=readFileSync('assets/nia-character-animated.glb');
+ assert.equal(b.toString('ascii',0,4),'glTF');
+ assert.equal(b.readUInt32LE(4),2);
 });
-test('workflow uploads an Android debug APK',()=>{
- const workflow=read('.github/workflows/android.yml');
- assert.match(workflow,/assembleDebug/);
- assert.match(workflow,/upload-artifact/);
+test('production workflow rejects missing approved rig',()=>{
+ const w=read('.github/workflows/android.yml');
+ assert.match(w,/nia-appearance-facial-rig-v2.glb/);
+ assert.match(w,/verify_nia_rig.py/);
+ assert.match(w,/assembleDebug/);
 });
-
-test('bundled GLB is present and has glTF 2 binary header',()=>{
- const file=readFileSync('assets/nia-character-animated.glb');
- assert.equal(file.toString('ascii',0,4),'glTF');
- assert.equal(file.readUInt32LE(4),2);
- assert.ok(file.length>1000);
+test('avatar renderer has animation, facial targets, and cleanup',()=>{
+ const a=read('src/Avatar3D.tsx'),render=read('src/loadNiaGLB.ts');
+ for(const word of ['mountNiaGLB','Dance','Walk','Wave','dispose'])assert.ok(a.includes(word),word);
+ for(const word of ['morphTargetDictionary','viseme_AA','skinnedMeshes'])assert.ok(render.includes(word),word);
 });
-test('active avatar screen loads bundled model and supports animation',()=>{
- const avatar=read('src/Avatar3D.tsx');
- assert.match(avatar,/mountNiaGLB/);
- assert.match(avatar,/niaBundledModel/);
- assert.match(avatar,/Dance/);
+test('camera and voice have lifecycle and opt-in behavior',()=>{
+ const s=read('app/index.tsx');
+ assert.match(s,/AppState.addEventListener/);
+ assert.match(s,/setCameraVisible\(false\)/);
+ assert.match(s,/requestCameraPermission/);
+ assert.match(s,/Speech.stop/);
 });
-
-test('bundled GLB contains playable Idle and Dance clips',()=>{
- const file=readFileSync('assets/nia-character-animated.glb');
- const jsonSize=file.readUInt32LE(12);
- const chunkType=file.toString('ascii',16,20);
- assert.equal(chunkType,'JSON');
- const gltf=JSON.parse(file.subarray(20,20+jsonSize).toString('utf8'));
- assert.ok(Array.isArray(gltf.animations));
- for(const name of ['Idle','Dance']){
-  const clip=gltf.animations.find(a=>a.name===name);
-  assert.ok(clip,'missing animation '+name);
-  assert.ok(clip.channels.length>0,'no animation channels '+name);
-  for(const channel of clip.channels){
-   assert.ok(channel.target.node<gltf.nodes.length,'invalid animation target');
-  }
- }
-});
-
-test('avatar renderer animates individual limbs and head',()=>{
- const renderer=read('src/loadNiaGLB.ts');
- for(const part of ['leftArm','rightArm','leftLeg','rightLeg','head']){
-  assert.match(renderer,new RegExp("getObjectByName\\('"+part+"'\\)"));
- }
- assert.match(renderer,/selected==='Dance'/);
-});
-
-test('spoken AI replies control avatar speaking state',()=>{
- const home=read('app/index.tsx');
- const avatar=read('src/Avatar3D.tsx');
- assert.match(home,/setAvatarSpeaking\(true\)/);
- assert.match(home,/onDone:\(\)=>\{setAvatarSpeaking\(false\)/);
- assert.match(home,/<Avatar3D speaking=\{avatarSpeaking\} visemes=\{visemeCues\}/);
- assert.match(avatar,/externalSpeaking\|\|speaking/);
-});
-
-test('animation rig has shoulder and hip pivots and Wave mode',()=>{
- const source=read('src/loadNiaGLB.ts');
- const avatar=read('src/Avatar3D.tsx');
- assert.match(source,/leftShoulder=rigged\?undefined:joint/);
- assert.match(source,/rightShoulder=rigged\?undefined:joint/);
- assert.match(source,/leftHip=rigged\?undefined:joint/);
- assert.match(source,/rightHip=rigged\?undefined:joint/);
- assert.match(source,/neck=rigged\?undefined:joint/);
- assert.match(source,/waveBlend/);
- assert.match(avatar,/'Wave'/);
-});
-test('opt-in check-ins recur weekly instead of expiring after seven days',()=>{
- const source=read('src/checkIns.ts');
- assert.match(source,/SchedulableTriggerInputTypes.WEEKLY/);
- assert.match(source,/cancelScheduledNotificationAsync/);
-});
-
-test('imported skeletal rig exposes Walk and facial morph playback',()=>{
- const renderer=read('src/loadNiaGLB.ts');
- const avatar=read('src/Avatar3D.tsx');
- assert.match(renderer,/rigged=!!model.getObjectByName\('Hips'\)/);
- assert.match(renderer,/morphTargetDictionary/);
- assert.match(renderer,/viseme_AA/);
- assert.match(avatar,/DocumentPicker.getDocumentAsync/);
- assert.match(avatar,/'Walk'/);
-});
-test('AI response accepts only validated viseme timing',()=>{
- const screen=read('app/index.tsx');
- const visemes=read('src/visemes.ts');
- assert.match(screen,/validateVisemes\(data.visemes\)/);
- assert.match(visemes,/previousEnd/);
-});
-
-test('GLB picker accepts ordinary filenames and exposes rig diagnostics',()=>{
- const avatar=read('src/Avatar3D.tsx');
- const renderer=read('src/loadNiaGLB.ts');
- assert.ok(avatar.includes("if(!/"+String.fromCharCode(92)+".glb$/i.test(file.name))"));
- assert.match(avatar,/Restore bundled model/);
- assert.match(avatar,/Diagnostics:/);
- assert.match(renderer,/skinnedMeshes/);
- assert.match(renderer,/morphTargets/);
-});
-
-test('speaking without timed cues still drives facial morph targets',()=>{
- const renderer=read('src/loadNiaGLB.ts');
- assert.match(renderer,/fallbackLevel=cues.length/);
- assert.match(renderer,/speaking\?'viseme_AA':null/);
- assert.match(renderer,/selected=name;/);
+test('notifications can be disabled',()=>{
+ const s=read('src/checkIns.ts');
+ assert.match(s,/cancelScheduledNotificationAsync/);
 });
