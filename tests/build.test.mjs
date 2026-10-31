@@ -72,3 +72,20 @@ test('spoken AI replies control avatar speaking state',()=>{
  assert.match(home,/<Avatar3D speaking=\{avatarSpeaking\}/);
  assert.match(avatar,/externalSpeaking\|\|speaking/);
 });
+
+test('animation rig has shoulder and hip pivots and Wave mode',()=>{
+ const source=read('src/loadNiaGLB.ts');
+ const avatar=read('src/Avatar3D.tsx');
+ assert.match(source,/leftShoulder=joint/);
+ assert.match(source,/rightShoulder=joint/);
+ assert.match(source,/leftHip=joint/);
+ assert.match(source,/rightHip=joint/);
+ assert.match(source,/neck=joint/);
+ assert.match(source,/waveBlend/);
+ assert.match(avatar,/'Wave'/);
+});
+test('opt-in check-ins recur weekly instead of expiring after seven days',()=>{
+ const source=read('src/checkIns.ts');
+ assert.match(source,/SchedulableTriggerInputTypes.WEEKLY/);
+ assert.match(source,/cancelScheduledNotificationAsync/);
+});
