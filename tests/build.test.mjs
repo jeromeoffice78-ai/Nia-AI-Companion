@@ -89,3 +89,19 @@ test('opt-in check-ins recur weekly instead of expiring after seven days',()=>{
  assert.match(source,/SchedulableTriggerInputTypes.WEEKLY/);
  assert.match(source,/cancelScheduledNotificationAsync/);
 });
+
+test('imported skeletal rig exposes Walk and facial morph playback',()=>{
+ const renderer=read('src/loadNiaGLB.ts');
+ const avatar=read('src/Avatar3D.tsx');
+ assert.match(renderer,/rigged=!!model.getObjectByName\('Hips'\)/);
+ assert.match(renderer,/morphTargetDictionary/);
+ assert.match(renderer,/viseme_AA/);
+ assert.match(avatar,/DocumentPicker.getDocumentAsync/);
+ assert.match(avatar,/'Walk'/);
+});
+test('AI response accepts only validated viseme timing',()=>{
+ const screen=read('app/index.tsx');
+ const visemes=read('src/visemes.ts');
+ assert.match(screen,/validateVisemes\(data.visemes\)/);
+ assert.match(visemes,/previousEnd/);
+});
