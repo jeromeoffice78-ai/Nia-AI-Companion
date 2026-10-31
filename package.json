@@ -30,7 +30,8 @@
     "expo-asset": "~12.0.0",
     "expo-file-system": "~19.0.0",
     "expo-font": "~14.0.0",
-    "@expo/metro-runtime": "~6.1.0"
+    "@expo/metro-runtime": "~6.1.0",
+    "expo-document-picker": "~14.0.0"
   },
   "devDependencies": {
     "typescript": "~5.9.2",
