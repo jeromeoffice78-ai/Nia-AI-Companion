@@ -41,7 +41,12 @@ export default function Home(){
  useEffect(()=>()=>{void Speech.stop();},[]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
-   if(state!=='active')setCameraVisible(false);
+   if(state!=='active'){
+    setCameraVisible(false);
+    void Speech.stop();
+    setAvatarSpeaking(false);
+    setVisemeCues([]);
+   }
   });
   return()=>subscription.remove();
  },[]);
