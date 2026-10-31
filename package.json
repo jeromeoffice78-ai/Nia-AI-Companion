@@ -36,7 +36,6 @@
   },
   "devDependencies": {
     "typescript": "~5.9.2",
-    "@types/three": "^0.180.0",
-    "@expo/config-plugins": "~54.0.0"
+    "@types/three": "^0.180.0"
   }
 }
