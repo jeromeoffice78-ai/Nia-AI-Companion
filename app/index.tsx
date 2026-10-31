@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
 import {CameraView,useCameraPermissions} from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import NiaAvatar from '../src/NiaAvatar';
 import Avatar3D from '../src/Avatar3D';
 import {VisemeCue,validateVisemes} from '../src/visemes';
@@ -28,6 +29,7 @@ export default function Home(){
  const [checkins,setCheckins]=useState(false);
  const [flirty,setFlirty]=useState(true);
  const [cameraVisible,setCameraVisible]=useState(false);
+ const [visionBusy,setVisionBusy]=useState(false);
  const [cameraPermission,requestCameraPermission]=useCameraPermissions();
  useEffect(()=>()=>{void Speech.stop();},[]);
  useEffect(()=>{
@@ -87,6 +89,33 @@ export default function Home(){
   }catch(e){Alert.alert('AI connection failed',String(e));}
   finally{setBusy(false);}
  }
+ async function lookAtScene(){
+  if(visionBusy||busy)return;
+  if(!endpoint||!token){Alert.alert('Connect GroqCloud first','Set the GroqCloud endpoint and your private API key in AI connection settings.');return;}
+  const permission=await ImagePicker.requestCameraPermissionsAsync();
+  if(!permission.granted){Alert.alert('Camera access required','Enable camera permission to take a photo for Nia to interpret.');return;}
+  const capture=await ImagePicker.launchCameraAsync({cameraType:ImagePicker.CameraType.front,base64:true,quality:0.45,allowsEditing:false});
+  if(capture.canceled||!capture.assets[0]?.base64)return;
+  const photo=capture.assets[0];
+  setVisionBusy(true);
+  try{
+   const visionModel='meta-llama/llama-4-scout-17b-16e-instruct';
+   const userQuestion=draft.trim()||'Describe my visible expression, clothing, and surroundings naturally. If any detail is uncertain, say so. Do not infer private or sensitive traits.';
+   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({model:visionModel,stream:false,max_tokens:350,messages:[
+      {role:'system',content:'You are Nia, a warm, playful AI companion. The user has explicitly shared a single camera photo for this response. Describe only visible details. Do not claim to watch continuously, know hidden feelings, or identify the person. Avoid sensitive inferences. '+(flirty?'You may use gentle, consensual flirtatious compliments.':'Keep a friendly, non-flirtatious tone.')},
+      {role:'user',content:[{type:'text',text:userQuestion},{type:'image_url',image_url:{url:'data:'+(photo.mimeType||'image/jpeg')+';base64,'+photo.base64}}]}
+    ]})});
+   if(!response.ok)throw new Error('Vision API HTTP '+response.status+'; check that your GroqCloud account supports '+visionModel);
+   const data=await response.json();
+   const answer=data?.choices?.[0]?.message?.content;
+   if(typeof answer!=='string'||!answer.trim())throw new Error('Vision response missing');
+   const updated:Message[]=[...messages,{role:'user',content:'[Shared a camera photo] '+userQuestion},{role:'assistant',content:answer}];
+   setMessages(updated);setDraft('');await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));
+   if(speak){await Speech.stop();setAvatarSpeaking(true);Speech.speak(answer,{language:'en-US',onDone:()=>setAvatarSpeaking(false),onStopped:()=>setAvatarSpeaking(false),onError:()=>setAvatarSpeaking(false)});}
+  }catch(error){Alert.alert('Vision unavailable',String(error));}
+  finally{setVisionBusy(false);}
+ }
  async function toggleCheckins(){
   try {if(checkins){await disableCheckIns();setCheckins(false);}else{await enableCheckIns();setCheckins(true);}}
   catch(e){Alert.alert('Notifications unavailable',String(e));}
@@ -98,7 +127,8 @@ export default function Home(){
   {show3d?<Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>:<NiaAvatar/>}
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
-  {cameraVisible?<View><CameraView style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Nia cannot interpret the video yet. Camera stops when this preview is closed; no background recording.</Text></View>:null}
+  {cameraVisible?<View><CameraView style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
+  <Pressable style={s.button} disabled={visionBusy||busy} onPress={lookAtScene}><Text style={s.white}>{visionBusy?'Nia is looking…':'Take photo and ask Nia what she sees'}</Text></Pressable>
   <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
