@@ -24,6 +24,8 @@ jobs:
         run: npm test
       - name: Align Expo dependency versions
         run: CI=1 npx expo install --fix
+      - name: Recheck tests after Expo dependency alignment
+        run: npm test
       - name: Check TypeScript
         run: npx tsc --noEmit
       - name: Generate Android project
@@ -32,6 +34,7 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: nia-debug-apk
