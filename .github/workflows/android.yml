@@ -18,6 +18,13 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+      - name: Verify bundled skeletal rig when present
+        run: |
+          if [ -f assets/nia-appearance-facial-rig-v2.glb ]; then
+            python3 scripts/verify_nia_rig.py assets/nia-appearance-facial-rig-v2.glb
+          else
+            echo 'WARNING: approved rig not yet committed; build will use prototype'
+          fi
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Validate project
