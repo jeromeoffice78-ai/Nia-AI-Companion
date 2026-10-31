@@ -25,3 +25,16 @@ test('workflow uploads an Android debug APK',()=>{
  assert.match(workflow,/assembleDebug/);
  assert.match(workflow,/upload-artifact/);
 });
+
+test('bundled GLB is present and has glTF 2 binary header',()=>{
+ const file=readFileSync('assets/nia-character-animated.glb');
+ assert.equal(file.toString('ascii',0,4),'glTF');
+ assert.equal(file.readUInt32LE(4),2);
+ assert.ok(file.length>1000);
+});
+test('active avatar screen loads bundled model and supports animation',()=>{
+ const avatar=read('src/Avatar3D.tsx');
+ assert.match(avatar,/mountNiaGLB/);
+ assert.match(avatar,/niaBundledModel/);
+ assert.match(avatar,/Dance/);
+});
