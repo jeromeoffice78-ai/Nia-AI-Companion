@@ -10,7 +10,8 @@
       "package": "com.nia.companion",
       "permissions": [
         "RECORD_AUDIO",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "CAMERA"
       ]
     },
     "plugins": [
@@ -18,7 +19,14 @@
       "expo-notifications",
       "expo-audio",
       "expo-image-picker",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Nia to show your front camera while you choose to use the camera preview.",
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }
