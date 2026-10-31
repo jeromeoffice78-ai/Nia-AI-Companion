@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.content.res.Configuration;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
@@ -57,6 +58,7 @@ public class NiaOverlayModule extends ReactContextBaseJavaModule {
     Button close=new Button(context);close.setText("×");controls.addView(close,new LinearLayout.LayoutParams(0,-2,1));panel.addView(controls);
     minimize.setOnClickListener(v->{boolean compact=avatar.getVisibility()==View.VISIBLE;avatar.setVisibility(compact?View.GONE:View.VISIBLE);params.height=compact?WindowManager.LayoutParams.WRAP_CONTENT:Math.max(240,height/2);manager.updateViewLayout(panel,params);});
     close.setOnClickListener(v->hideInternal());
+    avatar.setOnClickListener(v->{Intent launch=context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());if(launch!=null){launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);context.startActivity(launch);}});
     title.setOnTouchListener(new View.OnTouchListener(){float startX,startY;int initialX,initialY;
      @Override public boolean onTouch(View v,MotionEvent e){
       if(e.getAction()==MotionEvent.ACTION_DOWN){startX=e.getRawX();startY=e.getRawY();initialX=params.x;initialY=params.y;return true;}
@@ -67,6 +69,6 @@ public class NiaOverlayModule extends ReactContextBaseJavaModule {
    }catch(Exception e){hideInternal();promise.reject("OVERLAY_ERROR",e);}
   });
  }
- private void hideInternal(){if(floating!=null&&manager!=null){try{manager.removeViewImmediate(floating);}catch(Exception ignored){}floating=null;}}
+ private void hideInternal(){if(floating!=null&&manager!=null){try{manager.removeViewImmediate(floating);}catch(Exception ignored){}floating=null;}params=null;}
  @ReactMethod public void hide(Promise promise){Activity activity=getCurrentActivity();if(activity!=null)activity.runOnUiThread(()->{hideInternal();promise.resolve(true);});else{hideInternal();promise.resolve(true);}}
 }
