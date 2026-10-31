@@ -21,7 +21,9 @@ export default function Home(){
  const [setup,setSetup]=useState(false);
  const [busy,setBusy]=useState(false);
  const [speak,setSpeak]=useState(true);
+ const [avatarSpeaking,setAvatarSpeaking]=useState(false);
  const [checkins,setCheckins]=useState(false);
+ useEffect(()=>()=>{Speech.stop();},[]);
  useEffect(()=>{
   AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model']).then(entries=>{
    const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
@@ -59,7 +61,16 @@ export default function Home(){
    if(typeof answer!=='string'||!answer.trim())throw new Error('Invalid AI response');
    const updated:Message[]=[...history,{role:'assistant',content:answer}];
    setMessages(updated);await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));
-   if(speak)Speech.speak(answer,{language:'en-US'});
+   if(speak){
+    await Speech.stop();
+    setAvatarSpeaking(true);
+    Speech.speak(answer,{
+     language:'en-US',
+     onDone:()=>setAvatarSpeaking(false),
+     onStopped:()=>setAvatarSpeaking(false),
+     onError:()=>setAvatarSpeaking(false)
+    });
+   }
   }catch(e){Alert.alert('AI connection failed',String(e));}
   finally{setBusy(false);}
  }
@@ -71,8 +82,8 @@ export default function Home(){
  return <View style={s.screen}>
   <Text style={s.title}>Nia</Text>
   <Pressable style={s.secondary} onPress={()=>setShow3d(!show3d)}><Text style={s.white}>{show3d?'Show original photo':'Show animated 3D prototype'}</Text></Pressable>
-  {show3d?<Avatar3D/>:<NiaAvatar/>}
-  <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D avatar not yet installed</Text>
+  {show3d?<Avatar3D speaking={avatarSpeaking}/>:<NiaAvatar/>}
+  <Text style={s.note}>AI companion · {endpoint?'AI endpoint configured':'AI connection required'} · 3D prototype bundled; device playback not yet verified</Text>
   <Pressable onPress={()=>setSetup(!setup)} style={s.secondary}><Text style={s.white}>{setup?'Close settings':'AI connection settings'}</Text></Pressable>
   {setup?<View>
     <TextInput value={endpoint} onChangeText={setEndpoint} style={s.input} autoCapitalize="none" placeholder="https://server/v1/chat/completions" placeholderTextColor="#bbb"/>
