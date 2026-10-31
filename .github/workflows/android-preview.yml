@@ -22,11 +22,6 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
           test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}" || { echo 'Android SDK not found on runner'; exit 1; }
           java -version
-      - name: Require completed production avatar rig
-        run: |
-          test -s assets/nia-appearance-facial-rig-v2.glb || { echo '::error::Approved animated avatar missing; refusing incomplete APK'; exit 1; }
-          python3 scripts/verify_nia_rig.py assets/nia-appearance-facial-rig-v2.glb
-          cp assets/nia-appearance-facial-rig-v2.glb assets/nia-character-animated.glb
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Test
@@ -35,6 +30,11 @@ jobs:
         run: CI=1 npx expo install --fix
       - name: Type check
         run: npx tsc --noEmit
+      - name: Require completed production avatar rig
+        run: |
+          test -s assets/nia-appearance-facial-rig-v2.glb || { echo '::error::Approved animated avatar missing; refusing incomplete APK'; exit 1; }
+          python3 scripts/verify_nia_rig.py assets/nia-appearance-facial-rig-v2.glb
+          cp assets/nia-appearance-facial-rig-v2.glb assets/nia-character-animated.glb
       - name: Generate Android project
         run: npx expo prebuild --platform android --non-interactive --clean
       - name: Build preview APK
