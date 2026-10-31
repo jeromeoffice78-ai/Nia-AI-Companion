@@ -5,7 +5,7 @@ import {VisemeCue,visemeAt,mouthOpenForViseme,validateVisemes} from './visemes';
 /**
  * Load a bundled GLB into the Nia OpenGL scene.
  * Uses the bundled animated GLB asset from src/niaModel.ts.
- * This model has Idle and Dance animations but no skeletal rig.
+ * Android CI replaces the prototype with the approved skeletal GLB before packaging.
  */
 export async function mountNiaGLB(gl:any, assetModule:number|string) {
  const renderer=new Renderer({gl});
