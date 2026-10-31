@@ -1,11 +1,9 @@
-import {GLView} from 'expo-gl';
 import {Renderer,loadAsync} from 'expo-three';
 import * as THREE from 'three';
 
 /**
  * Load a bundled GLB into the Nia OpenGL scene.
- * Once assets/nia-character-animated.glb is committed to GitHub,
- * call with require('../assets/nia-character-animated.glb').
+ * Uses the bundled animated GLB asset from src/niaModel.ts.
  * This model has Idle and Dance animations but no skeletal rig.
  */
 export async function mountNiaGLB(gl:any, assetModule:number) {
@@ -20,8 +18,7 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
  camera.position.set(0,1.25,4.5);
  const loaded:any=await loadAsync(assetModule);
  const model:THREE.Object3D=loaded.scene||loaded;
- // GLB uses Z-up coordinates. Rotate to the Y-up scene.
- model.rotation.x=-Math.PI/2;
+ // Bundled GLB is already Y-up; do not rotate it.
  scene.add(model);
  const clips:THREE.AnimationClip[]=loaded.animations||[];
  const mixer=new THREE.AnimationMixer(model);
