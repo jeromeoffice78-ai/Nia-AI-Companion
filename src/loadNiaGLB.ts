@@ -121,14 +121,14 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   // Prefer true GLB facial blendshapes when the rig provides them.
   const viseme= cues.length?visemeAt(cues,(t-cueStartedAt)*1000):'sil';
   const mapped:Record<string,string>={PP:'viseme_MBP',FF:'viseme_FV',aa:'viseme_AA',E:'viseme_EE',ih:'viseme_EE',oh:'viseme_OH',ou:'viseme_OH',nn:'viseme_L',DD:'viseme_L',RR:'viseme_OH'};
-  const target=mapped[viseme]||'viseme_AA';
+  const target=viseme==='sil'?null:(mapped[viseme]||'viseme_AA');
   for(const mesh of faceMeshes){
    const dictionary=mesh.morphTargetDictionary||{};
    const influences=mesh.morphTargetInfluences;
    if(!influences)continue;
    for(const [key,index] of Object.entries(dictionary)){
     const isBlink=key==='blinkLeft'||key==='blinkRight';
-    const wanted=isBlink?blink:(speaking&&key===target?(visemeLevel??0.4):0);
+    const wanted=isBlink?blink:(speaking&&target!==null&&key===target?(visemeLevel??0.4):0);
     influences[index]+=(wanted-influences[index])*Math.min(1,delta*18);
    }
   }
