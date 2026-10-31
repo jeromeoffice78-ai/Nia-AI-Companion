@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {View,Text,Pressable,StyleSheet} from 'react-native';
+import {View,Text,Pressable,StyleSheet,useWindowDimensions} from 'react-native';
 import {GLView} from 'expo-gl';
 import {mountNiaGLB} from './loadNiaGLB';
 import {niaBundledModel} from './niaModel';
@@ -8,6 +8,8 @@ import {VisemeCue} from './visemes';
 type Motion='Idle'|'Walk'|'Dance'|'Wave';
 type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;dispose:()=>void};
 export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{speaking?:boolean;visemes?:VisemeCue[]}){
+ const {height}=useWindowDimensions();
+ const avatarHeight=Math.max(240,Math.round(height*0.5));
  const [motion,setMotion]=useState<Motion>('Idle');
  const [speaking,setSpeaking]=useState(false);
  const [error,setError]=useState('');
@@ -51,7 +53,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
  function select(next:Motion){if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}setError('');setMotion(next);}
  function toggleSpeaking(){setSpeaking(v=>{controller.current?.setSpeaking(!v);return !v;});}
  return <View style={s.wrap}>
-  <GLView key={modelUri||'bundled'} style={s.canvas} onContextCreate={onContextCreate}/>
+  <GLView key={modelUri||'bundled'} style={[s.canvas,{height:avatarHeight}]} onContextCreate={onContextCreate}/>
   <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import Nia appearance rig (.glb)</Text></Pressable>
   {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Bundled prototype');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
   <Text style={s.caption}>Model: {loadedName}</Text>
