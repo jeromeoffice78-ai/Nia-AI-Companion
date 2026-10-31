@@ -63,3 +63,12 @@ test('avatar renderer animates individual limbs and head',()=>{
  }
  assert.match(renderer,/selected==='Dance'/);
 });
+
+test('spoken AI replies control avatar speaking state',()=>{
+ const home=read('app/index.tsx');
+ const avatar=read('src/Avatar3D.tsx');
+ assert.match(home,/setAvatarSpeaking\(true\)/);
+ assert.match(home,/onDone:\(\)=>setAvatarSpeaking\(false\)/);
+ assert.match(home,/<Avatar3D speaking=\{avatarSpeaking\}/);
+ assert.match(avatar,/externalSpeaking\|\|speaking/);
+});
