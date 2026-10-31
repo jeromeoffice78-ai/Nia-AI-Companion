@@ -23,7 +23,7 @@ export default function Home(){
  const [speak,setSpeak]=useState(true);
  const [avatarSpeaking,setAvatarSpeaking]=useState(false);
  const [checkins,setCheckins]=useState(false);
- useEffect(()=>()=>{Speech.stop();},[]);
+ useEffect(()=>()=>{void Speech.stop();},[]);
  useEffect(()=>{
   AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model']).then(entries=>{
    const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
@@ -64,12 +64,15 @@ export default function Home(){
    if(speak){
     await Speech.stop();
     setAvatarSpeaking(true);
-    Speech.speak(answer,{
-     language:'en-US',
-     onDone:()=>setAvatarSpeaking(false),
-     onStopped:()=>setAvatarSpeaking(false),
-     onError:()=>setAvatarSpeaking(false)
-    });
+    try{
+     Speech.speak(answer,{
+      language:'en-US',
+      onDone:()=>setAvatarSpeaking(false),
+      onStopped:()=>setAvatarSpeaking(false),
+      onError:()=>setAvatarSpeaking(false)
+     });
+    }catch(speechError){setAvatarSpeaking(false);}
+
    }
   }catch(e){Alert.alert('AI connection failed',String(e));}
   finally{setBusy(false);}
@@ -78,7 +81,7 @@ export default function Home(){
   try {if(checkins){await disableCheckIns();setCheckins(false);}else{await enableCheckIns();setCheckins(true);}}
   catch(e){Alert.alert('Notifications unavailable',String(e));}
  }
- async function clearHistory(){await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
+ async function clearHistory(){await Speech.stop();setAvatarSpeaking(false);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
  return <View style={s.screen}>
   <Text style={s.title}>Nia</Text>
   <Pressable style={s.secondary} onPress={()=>setShow3d(!show3d)}><Text style={s.white}>{show3d?'Show original photo':'Show animated 3D prototype'}</Text></Pressable>
