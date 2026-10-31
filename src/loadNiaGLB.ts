@@ -1,5 +1,6 @@
 import {Renderer,loadAsync} from 'expo-three';
 import * as THREE from 'three';
+import {VisemeCue,visemeAt,mouthOpenForViseme,validateVisemes} from './visemes';
 
 /**
  * Load a bundled GLB into the Nia OpenGL scene.
@@ -53,6 +54,8 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
  let blinkAt=2.5;
  let blinkStart=-1;
  let speaking=false;
+ let cues:VisemeCue[]=[];
+ let cueStartedAt=0;
  // Face details are parented to the head mesh, so they follow head motion.
  const eyes:THREE.Mesh[]=[];
  let mouth:THREE.Mesh|null=null;
@@ -109,12 +112,13 @@ export async function mountNiaGLB(gl:any, assetModule:number) {
   if(blinkStart>=0&&t-blinkStart>0.16)blinkStart=-1;
   for(const eye of eyes)eye.scale.y=0.09*(1-0.93*blink);
   speechLevel+=(Number(speaking)-speechLevel)*Math.min(1,delta*9);
-  if(mouth)mouth.scale.y=0.10+speechLevel*0.19*(0.25+0.75*Math.abs(Math.sin(t*12)));
+  const visemeLevel=cues.length?mouthOpenForViseme(visemeAt(cues,(t-cueStartedAt)*1000)):null;
+  if(mouth)mouth.scale.y=0.10+speechLevel*0.19*(visemeLevel===null?(0.25+0.75*Math.abs(Math.sin(t*12))):visemeLevel);
   renderer.render(scene,camera);
   gl.endFrameEXP();
  }
  tick();
- return {play,setSpeaking(value:boolean){speaking=value},dispose(){
+ return {play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
   active=false;cancelAnimationFrame(frame);mixer.stopAllAction();
   scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();}});
   renderer.dispose();
