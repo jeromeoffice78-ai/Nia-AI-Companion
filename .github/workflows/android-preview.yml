@@ -1,4 +1,4 @@
-name: Build Nia Android Preview APK
+name: Nia Android Release Gate
 on:
   workflow_dispatch:
   push:
@@ -22,8 +22,11 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
           test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}" || { echo 'Android SDK not found on runner'; exit 1; }
           java -version
-      - name: Verify prototype model exists
-        run: test -s assets/nia-character-animated.glb
+      - name: Require completed production avatar rig
+        run: |
+          test -s assets/nia-appearance-facial-rig-v2.glb || { echo '::error::Approved animated avatar missing; refusing incomplete APK'; exit 1; }
+          python3 scripts/verify_nia_rig.py assets/nia-appearance-facial-rig-v2.glb
+          cp assets/nia-appearance-facial-rig-v2.glb assets/nia-character-animated.glb
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Test
@@ -50,6 +53,6 @@ jobs:
       - name: Upload preview APK
         uses: actions/upload-artifact@v4
         with:
-          name: nia-groq-preview-apk
+          name: nia-verified-rig-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
