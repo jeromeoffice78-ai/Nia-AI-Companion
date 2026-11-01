@@ -145,9 +145,9 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   if(rightHip)rightHip.rotation.x=-blend*0.32*Math.sin(t*3.4);
   if(neck){neck.rotation.y=0.08*Math.sin(t*0.8);neck.rotation.z=0.035*Math.sin(t*0.55);}
   // Add small lifelike secondary motion to rigged characters as well as prototype pivots.
-  if(headBone&&headRest){headBone.rotation.y+=0.025*Math.sin(t*0.8);headBone.rotation.z+=0.012*Math.sin(t*0.55);}
-  if(spineBone&&spineRest){spineBone.rotation.x+=0.008*Math.sin(t*1.5);spineBone.rotation.z+=0.015*Math.sin(t*0.6);}
-  if(jawBone&&jawRest&&speaking&&!cues.length){jawBone.rotation.x+=0.08*(0.5+0.5*Math.sin(t*11));}
+  if(headBone&&headRest){headBone.rotation.y=headRest.y+0.025*Math.sin(t*0.8);headBone.rotation.z=headRest.z+0.012*Math.sin(t*0.55);}
+  if(spineBone&&spineRest){spineBone.rotation.x=spineRest.x+0.008*Math.sin(t*1.5);spineBone.rotation.z=spineRest.z+0.015*Math.sin(t*0.6);}
+  if(jawBone&&jawRest&&speaking&&!cues.length){jawBone.rotation.x=jawRest.x+0.08*(0.5+0.5*Math.sin(t*11));}
   if(t>=blinkAt&&blinkStart<0){blinkStart=t;blinkAt=t+2.6+1.2*(0.5+0.5*Math.sin(t*3.1));}
   const blink=blinkStart<0?0:Math.max(0,Math.sin(Math.PI*Math.min(1,(t-blinkStart)/0.16)));
   if(blinkStart>=0&&t-blinkStart>0.16)blinkStart=-1;
