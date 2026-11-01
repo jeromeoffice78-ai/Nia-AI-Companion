@@ -49,3 +49,10 @@ test('backgrounding Nia stops speech and resets animation cues',()=>{
  assert.match(home,/void Speech.stop\(\)/);
  assert.match(home,/setVisemeCues\(\[\]\)/);
 });
+
+test('rig facial animation requires timed visemes rather than fabricated speech motion',()=>{
+ const renderer=read('src/loadNiaGLB.ts');
+ assert.match(renderer,/const target=cues\.length&&speaking\?/);
+ assert.match(renderer,/const fallbackLevel=visemeLevel\?\?0/);
+ assert.doesNotMatch(renderer,/speaking\?'viseme_AA':null/);
+});
