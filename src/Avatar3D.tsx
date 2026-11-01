@@ -53,7 +53,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    mounted.play(motion);
    mounted.setSpeaking(latestSpeaking.current);
    if(latestCues.current.length)mounted.setVisemes(latestCues.current);
-  }catch(e){if(!disposed.current&&generation===loadGeneration.current)setError(String(e));}
+  }catch(e){if(!disposed.current&&generation===loadGeneration.current){const details=e instanceof Error?(e.stack||e.message):String(e);setError(details);setDiagnostics('Avatar initialization error');}}
  }
  function select(next:Motion){setAutonomous(false);if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}setError('');setMotion(next);}
  function toggleSpeaking(){setSpeaking(v=>{controller.current?.setSpeaking(!v);return !v;});}
