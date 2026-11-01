@@ -1,4 +1,4 @@
-import Renderer from 'expo-three/build/Renderer';
+import {Renderer} from 'expo-three';
 import {Asset} from 'expo-asset';
 import {File} from 'expo-file-system';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
