@@ -155,7 +155,7 @@ export default function Home(){
  }
  async function shareHistory(){
   if(!messages.length){Alert.alert('No messages yet','Start a conversation before exporting.');return;}
-  await Share.share({message:messages.map(m=>(m.role==='user'?'You: ':'Nia: ')+m.content).join('\\n\\n')});
+  await Share.share({message:messages.map(m=>(m.role==='user'?'You: ':'Nia: ')+m.content).join('\n\n')});
  }
  async function changeAssistantMode(next:'companion'|'research'|'business'){
   setAssistantMode(next);await AsyncStorage.setItem('nia_assistant_mode',next);
