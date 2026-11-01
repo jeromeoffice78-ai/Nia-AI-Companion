@@ -11,6 +11,7 @@ import {VisemeCue,visemeAt,mouthOpenForViseme,validateVisemes} from './visemes';
  * Android CI replaces the prototype with the approved skeletal GLB before packaging.
  */
 export async function mountNiaGLB(gl:any, assetModule:number|string) {
+ let stage='renderer';
  const renderer=new Renderer({gl});
  renderer.setSize(gl.drawingBufferWidth,gl.drawingBufferHeight);
  const scene=new THREE.Scene();
@@ -22,22 +23,26 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  camera.position.set(0,1.25,4.5);
  let loaded:any;
  try{
+  stage='resolve asset';
   let uri:string;
   if(typeof assetModule==='number'){
    const asset=Asset.fromModule(assetModule);await asset.downloadAsync();
    if(!asset.localUri)throw new Error('Bundled avatar could not be loaded');
    uri=asset.localUri;
   }else{uri=assetModule;}
+  stage='read GLB file';
   const file=new File(uri);
   if(file.size>25*1024*1024)throw new Error('Avatar exceeds 25 MB limit');
   const bytes=await file.arrayBuffer();
+  stage='validate GLB';
   const view=new DataView(bytes);
   if(bytes.byteLength<20||view.getUint32(0,true)!==0x46546c67||view.getUint32(8,true)!==bytes.byteLength)throw new Error('Invalid binary GLB');
   const length=view.getUint32(12,true);
   const metadata=JSON.parse(new TextDecoder().decode(new Uint8Array(bytes,20,length)));
   if([...(metadata.buffers||[]),...(metadata.images||[])].some(item=>item.uri))throw new Error('Use a self-contained GLB with embedded resources');
+  stage='parse GLB';
   loaded=await new GLTFLoader().parseAsync(bytes,'');
- }catch(error){renderer.dispose();throw error;}
+ }catch(error){renderer.dispose();const message=error instanceof Error?error.message:String(error);throw new Error('Nia GLB '+stage+': '+message,{cause:error});}
  const model:THREE.Object3D=loaded.scene||loaded;
  // Bundled GLB is already Y-up; do not rotate it.
  scene.add(model);
