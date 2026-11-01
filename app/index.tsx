@@ -55,7 +55,7 @@ export default function Home(){
   const subscription=AppState.addEventListener('change',state=>{
    if(state!=='active'){
     speechVersion.current++;setCameraVisible(false);
-    if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().catch(()=>{});operation.current=false;}
+    if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{});operation.current=false;}
     void Speech.stop();
     setAvatarSpeaking(false);
     setVisemeCues([]);
@@ -141,7 +141,7 @@ export default function Home(){
  async function toggleVoice(){
   if(voiceBusy||!loaded)return;
   if(!recordingRef.current&&operation.current)return;
-  if(useGateway){Alert.alert('Voice connection','Voice transcription currently requires the direct Groq-compatible connection. Gateway voice is not implemented.');return;}
+  if(useGateway&&!recordingRef.current){Alert.alert('Voice connection','Voice transcription currently requires the direct Groq-compatible connection. Gateway voice is not implemented.');return;}
   operation.current=true;setVoiceBusy(true);
   try{
    if(recordingRef.current){
@@ -156,7 +156,10 @@ export default function Home(){
     if(!permission.granted)throw new Error('Microphone permission was not granted.');
     speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);
     await setAudioModeAsync({allowsRecording:true,playsInSilentMode:true});
-    await recorder.prepareToRecordAsync();recorder.record();
+    if(AppState.currentState!=='active')throw new Error('Return to Nia before recording.');
+    await recorder.prepareToRecordAsync();
+    if(AppState.currentState!=='active')throw new Error('Recording was cancelled while Nia was backgrounded.');
+    recorder.record();
     recordingRef.current=true;setRecording(true);operation.current=true;
    }
   }catch(error){recordingRef.current=false;setRecording(false);await recorder.stop().catch(()=>{});await setAudioModeAsync({allowsRecording:false}).catch(()=>{});Alert.alert('Voice unavailable',String(error));}

@@ -18,14 +18,14 @@ export async function disableCheckIns():Promise<void> {
 }
 
 export async function enableCheckIns():Promise<number> {
- const permission=await Notifications.requestPermissionsAsync();
- if(!permission.granted)throw new Error('Notification permission not granted');
- await disableCheckIns();
  if(process.env.EXPO_OS === 'android'){
   await Notifications.setNotificationChannelAsync('nia-checkins',{
    name:'Nia check-ins',importance:Notifications.AndroidImportance.DEFAULT,
   });
  }
+ const permission=await Notifications.requestPermissionsAsync();
+ if(!permission.granted)throw new Error('Notification permission not granted');
+ await disableCheckIns();
  const ids:string[]=[];
  // Seven recurring weekly notifications: one per weekday, each at a
  // deterministic daytime hour. Unlike one-time DATE triggers, these do not
