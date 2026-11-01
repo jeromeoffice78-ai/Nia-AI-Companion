@@ -41,7 +41,13 @@ export async function loadConversation():Promise<NiaMessage[]>{
 }
 export async function saveConversation(messages:NiaMessage[]):Promise<void>{
  const raw=JSON.stringify(messages.slice(-200));
- const parts=Array.from({length:Math.ceil(raw.length/CHUNK)},(_,i)=>raw.slice(i*CHUNK,(i+1)*CHUNK));
+ const parts:string[]=[];
+ let chunk='';
+ for(const character of raw){
+  if(chunk.length+character.length>CHUNK){parts.push(chunk);chunk='';}
+  chunk+=character;
+ }
+ if(chunk)parts.push(chunk);
  if(parts.length>MAX_CHUNKS)throw new Error('Encrypted conversation exceeds 240 KB. Export or clear older messages first.');
  const previousRaw=await SecureStore.getItemAsync(ROOT);
  const previous:unknown=previousRaw?JSON.parse(previousRaw):null;
