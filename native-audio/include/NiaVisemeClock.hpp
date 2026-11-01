@@ -41,23 +41,39 @@ public:
 // Anchor to the *measured audio playback head*, never the wall clock or
 // a guessed TTS start time. Android AudioTrack timestamps can supply the anchor.
 class PlaybackClock {
+  // Seqlock: one writer publishes frame, timestamp and sample rate atomically
+  // as a coherent snapshot to any number of readers.
+  std::atomic<uint64_t> sequence_{0};
   std::atomic<int64_t> frame_{0};
   std::atomic<int64_t> timestampNs_{0};
   std::atomic<int32_t> sampleRate_{48000};
 public:
+  // Exactly one thread may call update().
   void update(int64_t playbackFrame, int64_t monotonicNs, int32_t sampleRate) noexcept {
     if(sampleRate<=0 || monotonicNs<=0 || playbackFrame<0) return;
-    sampleRate_.store(sampleRate,std::memory_order_relaxed);
+    sequence_.fetch_add(1,std::memory_order_acq_rel);
     frame_.store(playbackFrame,std::memory_order_relaxed);
-    timestampNs_.store(monotonicNs,std::memory_order_release);
+    timestampNs_.store(monotonicNs,std::memory_order_relaxed);
+    sampleRate_.store(sampleRate,std::memory_order_relaxed);
+    sequence_.fetch_add(1,std::memory_order_release);
   }
   int64_t frameAt(int64_t monotonicNs) const noexcept {
-    const auto anchorNs=timestampNs_.load(std::memory_order_acquire);
-    if(anchorNs<=0) return -1;
-    const auto base=frame_.load(std::memory_order_relaxed);
-    const auto rate=sampleRate_.load(std::memory_order_relaxed);
-    const auto delta=std::clamp(monotonicNs-anchorNs,int64_t(-50000000),int64_t(50000000));
-    return std::max<int64_t>(0,base+delta*rate/1000000000LL);
+    int64_t base=0,anchorNs=0;
+    int32_t rate=0;
+    for(int attempt=0;attempt<8;++attempt) {
+      const auto before=sequence_.load(std::memory_order_acquire);
+      if(before&1U) continue;
+      base=frame_.load(std::memory_order_relaxed);
+      anchorNs=timestampNs_.load(std::memory_order_relaxed);
+      rate=sampleRate_.load(std::memory_order_relaxed);
+      const auto after=sequence_.load(std::memory_order_acquire);
+      if(before==after) {
+        if(anchorNs<=0 || rate<=0) return -1;
+        const auto delta=std::clamp(monotonicNs-anchorNs,int64_t(-50000000),int64_t(50000000));
+        return std::max<int64_t>(0,base+delta*rate/1000000000LL);
+      }
+    }
+    return -1; // Busy writer: fail closed rather than use a torn timestamp.
   }
 };
 } // namespace nia
