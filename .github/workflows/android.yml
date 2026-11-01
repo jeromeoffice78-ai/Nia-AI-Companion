@@ -21,13 +21,17 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Validate project
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee nia-test.log
       - name: Align Expo dependency versions
         run: CI=1 npx expo install --fix
       - name: Recheck tests after Expo dependency alignment
         run: npm test
       - name: Check TypeScript
-        run: npx tsc --noEmit
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee nia-typescript.log
       - name: Require approved Nia rig and replace prototype
         run: |
           test -s assets/nia-appearance-facial-rig-v2.glb || { echo "::error::Approved skeletal rig is missing from assets/"; exit 1; }
@@ -47,3 +51,12 @@ jobs:
           name: nia-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nia-validation-logs
+          path: |
+            nia-test.log
+            nia-typescript.log
+          if-no-files-found: ignore
