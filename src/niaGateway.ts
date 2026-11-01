@@ -29,6 +29,7 @@ export async function chatWithGateway(settings:NiaGatewaySettings,messages:NiaMe
  const baseUrl=normalizeGatewayUrl(settings.baseUrl);
  if(!settings.clientToken.trim())throw new NiaGatewayError('Enter a gateway access token.');
  if(!messages.length)throw new NiaGatewayError('Conversation is empty.');
+ if(messages.some(m=>!['user','assistant'].includes(m.role)||typeof m.content!=='string'||m.content.length>16000))throw new NiaGatewayError('Invalid or oversized conversation message.');
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),35000);
  try{
@@ -38,9 +39,13 @@ export async function chatWithGateway(settings:NiaGatewaySettings,messages:NiaMe
    body:JSON.stringify({messages:messages.slice(-40),mode,flirty})
   });
   if(!response.ok)throw new NiaGatewayError(response.status===401?'Gateway access token rejected':response.status===503?'Gateway not configured':'Gateway returned HTTP '+response.status,response.status);
-  const result=await response.json();
-  if(typeof result?.answer!=='string'||!result.answer.trim()||typeof result?.model!=='string')throw new NiaGatewayError('Unexpected gateway response.');
-  return {answer:result.answer,model:result.model};
+  const raw=await response.text();
+  if(raw.length>1000000)throw new NiaGatewayError('Gateway response exceeds size limit.');
+  let result:unknown;
+  try{result=JSON.parse(raw);}catch{throw new NiaGatewayError('Gateway returned malformed JSON.');}
+  const payload=result as {answer?:unknown;model?:unknown}|null;
+  if(typeof payload?.answer!=='string'||!payload.answer.trim()||payload.answer.length>16000||typeof payload?.model!=='string'||!payload.model.trim())throw new NiaGatewayError('Unexpected gateway response.');
+  return {answer:payload.answer,model:payload.model};
  }catch(error){
   if(error instanceof NiaGatewayError)throw error;
   throw new NiaGatewayError('Gateway connection failed: '+String(error));
