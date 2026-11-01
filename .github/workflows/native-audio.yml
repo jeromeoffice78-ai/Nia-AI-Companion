@@ -1,0 +1,20 @@
+name: Native audio clock
+on:
+  push:
+    paths:
+      - 'native-audio/**'
+      - '.github/workflows/native-audio.yml'
+  pull_request:
+    paths:
+      - 'native-audio/**'
+      - '.github/workflows/native-audio.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile with warnings and sanitizers
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -pthread -Inative-audio/include native-audio/tests/viseme_clock_test.cpp -o /tmp/nia-clock-test
+      - name: Run native regression tests
+        run: /tmp/nia-clock-test
