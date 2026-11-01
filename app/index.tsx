@@ -8,6 +8,7 @@ import {transcribeAudio} from '../src/voice';
 import {CameraView,useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import Avatar3D from '../src/Avatar3D';
+import {showNiaOverlay,hideNiaOverlay} from '../src/niaOverlay';
 import {VisemeCue} from '../src/visemes';
 import {secureUrl,fetchWithTimeout} from '../src/network';
 import {parseHistory} from '../src/history';
@@ -40,6 +41,7 @@ export default function Home(){
  const [checkins,setCheckins]=useState(false);
  const [flirty,setFlirty]=useState(true);
  const [cameraVisible,setCameraVisible]=useState(false);
+ const [overlayVisible,setOverlayVisible]=useState(false);
  const [visionBusy,setVisionBusy]=useState(false);
  const [memoryNotes,setMemoryNotes]=useState('');
  const [memoryDraft,setMemoryDraft]=useState('');
@@ -216,6 +218,8 @@ export default function Home(){
  return <ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
   <Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>
+  <Pressable style={s.secondary} onPress={async()=>{try{if(overlayVisible){await hideNiaOverlay();setOverlayVisible(false);}else{const status=await showNiaOverlay();if(status==='permission-required'){Alert.alert('Floating panel permission','Allow display over other apps in Android settings, return to Nia, and tap again.');}else setOverlayVisible(true);}}catch(e){Alert.alert('Floating panel unavailable',String(e));}}}><Text style={s.white}>{overlayVisible?'Close floating Nia panel':'Open floating Nia panel'}</Text></Pressable>
+  <Text style={s.note}>The native floating panel is a movable launcher, not the live 3D character. Full floating 3D rendering requires a separate Android renderer.</Text>
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
   {cameraVisible?<View><CameraView ref={cameraRef} style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
