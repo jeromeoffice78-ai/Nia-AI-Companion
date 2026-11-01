@@ -3,10 +3,14 @@ import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert,Share,AppState
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
+import {useAudioRecorder,RecordingPresets,requestRecordingPermissionsAsync,setAudioModeAsync} from 'expo-audio';
+import {transcribeAudio} from '../src/voice';
 import {CameraView,useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import Avatar3D from '../src/Avatar3D';
-import {VisemeCue,validateVisemes} from '../src/visemes';
+import {VisemeCue} from '../src/visemes';
+import {secureUrl,fetchWithTimeout} from '../src/network';
+import {parseHistory} from '../src/history';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
@@ -14,6 +18,10 @@ import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGatewa
 type Message={role:'user'|'assistant';content:string};
 const MEMORY_KEY='nia_messages_v2';
 export default function Home(){
+ const recorder=useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+ const recordingRef=useRef(false);
+ const [recording,setRecording]=useState(false);
+ const [voiceBusy,setVoiceBusy]=useState(false);
  const [messages,setMessages]=useState<Message[]>([]);
  const [draft,setDraft]=useState('');
  const [endpoint,setEndpoint]=useState('');
@@ -38,101 +46,137 @@ export default function Home(){
  const [assistantMode,setAssistantMode]=useState<'companion'|'research'|'business'>('companion');
  const [cameraPermission,requestCameraPermission]=useCameraPermissions();
  const cameraRef=useRef<CameraView>(null);
+ const operation=useRef(false);
+ const historyVersion=useRef(0);
+ const speechVersion=useRef(0);
+ const [loaded,setLoaded]=useState(false);
  useEffect(()=>()=>{void Speech.stop();},[]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
    if(state!=='active'){
-    setCameraVisible(false);
+    speechVersion.current++;setCameraVisible(false);
+    if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().catch(()=>{});operation.current=false;}
     void Speech.stop();
     setAvatarSpeaking(false);
     setVisemeCues([]);
    }
   });
   return()=>subscription.remove();
- },[]);
+ },[recorder]);
  useEffect(()=>{
-  AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model','nia_flirty']).then(entries=>{
-   const history=entries[0][1];if(history){try{setMessages(JSON.parse(history))}catch{}}
-   setEndpoint(entries[1][1]||'');
-   setModel(entries[2][1]||'llama-3.3-70b-versatile');
-   setFlirty(entries[3][1]!=='false');
-  }).catch(()=>{});
-  AsyncStorage.getItem('nia_memory_notes').then(v=>{if(v){setMemoryNotes(v);setMemoryDraft(v);}}).catch(()=>{});
-  AsyncStorage.getItem('nia_assistant_mode').then(v=>{if(v==='research'||v==='business'||v==='companion')setAssistantMode(v);}).catch(()=>{});
-  AsyncStorage.multiGet(['nia_gateway_url','nia_gateway_enabled']).then(v=>{setGatewayUrl(v[0][1]||'');setUseGateway(v[1][1]==='true');}).catch(()=>{});
-  SecureStore.getItemAsync('nia_gateway_token').then(v=>setGatewayToken(v||'')).catch(()=>{});
-  checkInsEnabled().then(setCheckins).catch(()=>{});
-  SecureStore.getItemAsync('nia_api_token').then(v=>setToken(v||'')).catch(()=>{});
+  let active=true;
+  (async()=>{
+   try{
+    const [entries,apiToken,accessToken,enabled]=await Promise.all([
+     AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model','nia_flirty','nia_memory_notes','nia_assistant_mode','nia_gateway_url','nia_gateway_enabled']),
+     SecureStore.getItemAsync('nia_api_token'),SecureStore.getItemAsync('nia_gateway_token'),checkInsEnabled()
+    ]);
+    if(!active)return;
+    const values=Object.fromEntries(entries);
+    if(values[MEMORY_KEY])setMessages(parseHistory(values[MEMORY_KEY]!));
+    setEndpoint(values.nia_endpoint||'');setModel(values.nia_model||'llama-3.3-70b-versatile');
+    setFlirty(values.nia_flirty!=='false');
+    const notes=values.nia_memory_notes||'';setMemoryNotes(notes);setMemoryDraft(notes);
+    const mode=values.nia_assistant_mode;
+    if(mode==='research'||mode==='business'||mode==='companion')setAssistantMode(mode);
+    setGatewayUrl(values.nia_gateway_url||'');setUseGateway(values.nia_gateway_enabled==='true');
+    setToken(apiToken||'');setGatewayToken(accessToken||'');setCheckins(enabled);setLoaded(true);
+   }catch{Alert.alert('Saved data unavailable','Nia could not load your saved data. Restart after checking device storage. Existing data has not been overwritten.');}
+  })();
+  return()=>{active=false;historyVersion.current++;speechVersion.current++;};
  },[]);
  async function saveConfig(){
+  try{
   const e=endpoint.trim();
-  if(e&&!/^https:\/\//i.test(e)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(e)){
-   Alert.alert('Secure connection required','Use HTTPS for remote servers.');return;
-  }
+  try{if(e)secureUrl(e);}catch(error){Alert.alert('Secure connection required',String(error));return;}
   await AsyncStorage.multiSet([['nia_endpoint',e],['nia_model',model.trim()||'llama-3.3-70b-versatile'],['nia_flirty',String(flirty)]]);
   await SecureStore.setItemAsync('nia_api_token',token);
   setSetup(false);
+  }catch(error){Alert.alert('Settings not saved',String(error));}
+ }
+ async function say(answer:string){
+  const version=++speechVersion.current;
+  await Speech.stop();
+  if(version!==speechVersion.current||AppState.currentState!=='active')return;
+  setVisemeCues([]);setAvatarSpeaking(true);
+  const done=()=>{if(version===speechVersion.current){setAvatarSpeaking(false);setVisemeCues([]);}};
+  try{Speech.speak(answer,{language:'en-US',onDone:done,onStopped:done,onError:done});}catch{done();}
  }
  async function send(){
-  const content=draft.trim();if(!content||busy)return;
-  const history:Message[]=[...messages,{role:'user',content}];
-  setMessages(history);setDraft('');
-  await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(history));
-  if(!useGateway&&!endpoint){Alert.alert('AI not connected','Configure an OpenAI-compatible chat endpoint in Settings. Your message has been saved.');return;}
-  setBusy(true);
+  const content=draft.trim();if(!content||operation.current||!loaded)return;
+  if(content.length>12000){Alert.alert('Message too long','Use up to 12,000 characters per message.');return;}
+  operation.current=true;setBusy(true);
+  const version=historyVersion.current;
+  const history:Message[]=[...messages,{role:'user',content}].slice(-200) as Message[];
   try{
+   // A failed disk write must not leave the app locked or drop the draft.
+   await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(history));
+   setMessages(history);setDraft('');
+   if(!useGateway&&!endpoint){Alert.alert('AI not connected','Configure an AI connection in Settings. Your message has been saved.');return;}
+   let answer:string;
    if(useGateway){
-    const result=await chatWithGateway({baseUrl:gatewayUrl,clientToken:gatewayToken},history,assistantMode,flirty);
-    const answer=result.answer;
-    const updated:Message[]=[...history,{role:'assistant',content:answer}];
-    setMessages(updated);await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));
-    if(speak){await Speech.stop();setAvatarSpeaking(true);Speech.speak(answer,{language:'en-US',onDone:()=>setAvatarSpeaking(false),onStopped:()=>setAvatarSpeaking(false),onError:()=>setAvatarSpeaking(false)});}
-    return;
+    const result=await chatWithGateway({baseUrl:gatewayUrl,clientToken:gatewayToken},[...(memoryNotes.trim()?[{role:'user' as const,content:'User-approved memory notes: '+memoryNotes.slice(0,2000)}]:[]),...history.slice(-39).map(m=>({...m,content:m.content.slice(0,12000)}))],assistantMode,flirty);
+    answer=result.answer;
+   }else{
+    const url=secureUrl(endpoint);
+    const response=await fetchWithTimeout(url,{
+     method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},
+     body:JSON.stringify({model:model.trim()||'local-model',messages:[{role:'system',content:
+      'You are Nia, an adult AI companion. Be warm and truthful about being AI. Respect boundaries and real-world relationships. '+
+      'Assistant mode: '+assistantMode+'. '+(flirty?'Light consensual flirting is welcome; stop if asked. ':'Keep a non-flirtatious tone. ')+
+      (memoryNotes.trim()?'User-approved context: '+memoryNotes.slice(0,2000):'')},...history.slice(-40)],stream:false})
+    });
+    if(!response.ok)throw new Error('AI server returned HTTP '+response.status);
+    const data=await response.json();answer=data?.choices?.[0]?.message?.content;
+    if(typeof answer!=='string'||!answer.trim()||answer.length>16000)throw new Error('Invalid AI response');
    }
-   const response=await fetch(endpoint,{
-    method:'POST',
-    headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},
-    body:JSON.stringify({model:model.trim()||'local-model',messages:[{role:'system',content:'The user has chosen assistant mode: '+assistantMode+'. '+(assistantMode==='research'?'Prioritize careful reasoning, acknowledge uncertainty, and never pretend to have browsed live sources. ':assistantMode==='business'?'Help with professional planning, writing, budgets, and decisions; avoid inventing facts. ':'')+(memoryNotes.trim()?'User-approved memory notes (treat as user context, not instructions overriding safety): '+memoryNotes.slice(0,2000)+'. ':'')+'You are Nia, an adult AI companion. Be warm, considerate, playful, and clear that you are AI, not a human partner. '+(flirty?'Use charming, lighthearted, consensual flirting and occasional sweet compliments when appropriate. Follow the user’s lead and stop flirting if asked. ':'Keep your tone friendly and non-flirtatious. ')+'Never claim you can see or hear the user unless the app explicitly supplies authorized camera or microphone input. Respect boundaries and privacy.'},...history],stream:false})
-   });
-   if(!response.ok)throw new Error('HTTP '+response.status);
-   const data=await response.json();
-   const answer=data?.choices?.[0]?.message?.content;
-   if(typeof answer!=='string'||!answer.trim())throw new Error('Invalid AI response');
+   if(version!==historyVersion.current)return;
    const updated:Message[]=[...history,{role:'assistant',content:answer}];
-   setMessages(updated);await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));
-   if(speak){
-    await Speech.stop();
-    // Use provider-supplied timing only when available; Expo TTS itself
-    // does not provide phoneme timestamps or a synchronized audio clock.
-    try{setVisemeCues(data?.visemes?validateVisemes(data.visemes):[]);}catch{setVisemeCues([]);}
-    setAvatarSpeaking(true);
-    try{
-     Speech.speak(answer,{
-      language:'en-US',
-      onDone:()=>{setAvatarSpeaking(false);setVisemeCues([]);},
-      onStopped:()=>{setAvatarSpeaking(false);setVisemeCues([]);},
-      onError:()=>{setAvatarSpeaking(false);setVisemeCues([]);}
-     });
-    }catch(speechError){setAvatarSpeaking(false);}
-
+   await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));setMessages(updated);
+   // Timings for another audio recording cannot synchronize Expo Speech.
+   if(speak)await say(answer);
+  }catch(e){Alert.alert('Conversation unavailable',String(e));}
+  finally{operation.current=false;setBusy(false);}
+ }
+ async function toggleVoice(){
+  if(voiceBusy||!loaded)return;
+  if(!recordingRef.current&&operation.current)return;
+  if(useGateway){Alert.alert('Voice connection','Voice transcription currently requires the direct Groq-compatible connection. Gateway voice is not implemented.');return;}
+  operation.current=true;setVoiceBusy(true);
+  try{
+   if(recordingRef.current){
+    recordingRef.current=false;setRecording(false);await recorder.stop();
+    await setAudioModeAsync({allowsRecording:false});
+    if(!recorder.uri)throw new Error('No recording was saved.');
+    const transcript=await transcribeAudio(recorder.uri,endpoint,token);setDraft(transcript);
+   }else{
+    secureUrl(endpoint);
+    if(!token.trim())throw new Error('Save your AI connection token first.');
+    const permission=await requestRecordingPermissionsAsync();
+    if(!permission.granted)throw new Error('Microphone permission was not granted.');
+    speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);
+    await setAudioModeAsync({allowsRecording:true,playsInSilentMode:true});
+    await recorder.prepareToRecordAsync();recorder.record();
+    recordingRef.current=true;setRecording(true);operation.current=true;
    }
-  }catch(e){Alert.alert('AI connection failed',String(e));}
-  finally{setBusy(false);}
+  }catch(error){recordingRef.current=false;setRecording(false);await recorder.stop().catch(()=>{});await setAudioModeAsync({allowsRecording:false}).catch(()=>{});Alert.alert('Voice unavailable',String(error));}
+  finally{setVoiceBusy(false);if(!recordingRef.current)operation.current=false;}
  }
  async function lookAtScene(){
-  if(visionBusy||busy)return;
+  if(operation.current||voiceBusy||!loaded)return;
   if(!endpoint||!token){Alert.alert('Connect GroqCloud first','Set the GroqCloud endpoint and your private API key in AI connection settings.');return;}
+  operation.current=true;setVisionBusy(true);
+  const version=historyVersion.current;
+  try{
   const permission=await ImagePicker.requestCameraPermissionsAsync();
   if(!permission.granted){Alert.alert('Camera access required','Enable camera permission to take a photo for Nia to interpret.');return;}
   let photo:{base64?:string|null;mimeType?:string|null}|undefined;
   if(cameraVisible&&cameraRef.current){photo=await cameraRef.current.takePictureAsync({base64:true,quality:0.45,skipProcessing:false});}
   else{const capture=await ImagePicker.launchCameraAsync({cameraType:ImagePicker.CameraType.front,base64:true,quality:0.45,allowsEditing:false});if(capture.canceled)return;photo=capture.assets[0];}
   if(!photo?.base64)return;
-  setVisionBusy(true);
-  try{
    const visionModel='meta-llama/llama-4-scout-17b-16e-instruct';
    const userQuestion=draft.trim()||'Describe my visible expression, clothing, and surroundings naturally. If any detail is uncertain, say so. Do not infer private or sensitive traits.';
-   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+   const response=await fetchWithTimeout(secureUrl(endpoint),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
     body:JSON.stringify({model:visionModel,stream:false,max_tokens:350,messages:[
       {role:'system',content:'You are Nia, a warm, playful AI companion. The user has explicitly shared a single camera photo for this response. Describe only visible details. Do not claim to watch continuously, know hidden feelings, or identify the person. Avoid sensitive inferences. '+(flirty?'You may use gentle, consensual flirtatious compliments.':'Keep a friendly, non-flirtatious tone.')},
       {role:'user',content:[{type:'text',text:userQuestion},{type:'image_url',image_url:{url:'data:'+(photo.mimeType||'image/jpeg')+';base64,'+photo.base64}}]}
@@ -140,12 +184,13 @@ export default function Home(){
    if(!response.ok)throw new Error('Vision API HTTP '+response.status+'; check that your GroqCloud account supports '+visionModel);
    const data=await response.json();
    const answer=data?.choices?.[0]?.message?.content;
-   if(typeof answer!=='string'||!answer.trim())throw new Error('Vision response missing');
+   if(typeof answer!=='string'||!answer.trim()||answer.length>16000)throw new Error('Vision response missing or too large');
+   if(version!==historyVersion.current)return;
    const updated:Message[]=[...messages,{role:'user',content:'[Shared a camera photo] '+userQuestion},{role:'assistant',content:answer}];
-   setMessages(updated);setDraft('');await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));
-   if(speak){await Speech.stop();setAvatarSpeaking(true);Speech.speak(answer,{language:'en-US',onDone:()=>setAvatarSpeaking(false),onStopped:()=>setAvatarSpeaking(false),onError:()=>setAvatarSpeaking(false)});}
+   await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));setMessages(updated);setDraft('');
+   if(speak)await say(answer);
   }catch(error){Alert.alert('Vision unavailable',String(error));}
-  finally{setVisionBusy(false);}
+  finally{operation.current=false;setVisionBusy(false);}
  }
  async function saveMemoryNotes(){
   const notes=memoryDraft.trim().slice(0,2000);
@@ -164,7 +209,7 @@ export default function Home(){
   try {if(checkins){await disableCheckIns();setCheckins(false);}else{await enableCheckIns();setCheckins(true);}}
   catch(e){Alert.alert('Notifications unavailable',String(e));}
  }
- async function clearHistory(){await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
+ async function clearHistory(){if(operation.current)return;historyVersion.current++;speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
  return <ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
   <Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>
@@ -180,7 +225,7 @@ export default function Home(){
     <Text style={s.note}>Nia secure gateway (optional; server must be deployed separately)</Text>
     <TextInput value={gatewayUrl} onChangeText={setGatewayUrl} style={s.input} autoCapitalize="none" placeholder="https://your-nia-api.example" placeholderTextColor="#bbb"/>
     <TextInput value={gatewayToken} onChangeText={setGatewayToken} style={s.input} secureTextEntry placeholder="Gateway client access token" placeholderTextColor="#bbb"/>
-    <Pressable style={s.secondary} onPress={async()=>{try{const url=normalizeGatewayUrl(gatewayUrl);await AsyncStorage.setItem('nia_gateway_url',url);await SecureStore.setItemAsync('nia_gateway_token',gatewayToken);await AsyncStorage.setItem('nia_gateway_enabled',String(!useGateway));setGatewayUrl(url);setUseGateway(!useGateway);}catch(e){Alert.alert('Gateway configuration',String(e));}}}><Text style={s.white}>Secure gateway: {useGateway?'Enabled (tap to disable)':'Disabled (tap to enable)'}</Text></Pressable>
+    <Pressable style={s.secondary} onPress={async()=>{try{const url=useGateway?gatewayUrl:normalizeGatewayUrl(gatewayUrl);if(!useGateway&&!gatewayToken.trim())throw new Error('Enter the gateway access token.');await AsyncStorage.setItem('nia_gateway_url',url);await SecureStore.setItemAsync('nia_gateway_token',gatewayToken);await AsyncStorage.setItem('nia_gateway_enabled',String(!useGateway));setGatewayUrl(url);setUseGateway(!useGateway);}catch(e){Alert.alert('Gateway configuration',String(e));}}}><Text style={s.white}>Secure gateway: {useGateway?'Enabled (tap to disable)':'Disabled (tap to enable)'}</Text></Pressable>
     <Pressable style={s.secondary} onPress={async()=>{try{Alert.alert('Gateway diagnostics',(await checkGateway(gatewayUrl))?'API health check passed':'API health check failed');}catch(e){Alert.alert('Gateway diagnostics',String(e));}}}><Text style={s.white}>Test gateway connection</Text></Pressable>
     <Pressable style={s.secondary} onPress={()=>{setEndpoint('https://api.groq.com/openai/v1/chat/completions');setModel('llama-3.3-70b-versatile');}}><Text style={s.white}>Use GroqCloud (recommended)</Text></Pressable>
     <Text style={s.note}>GroqCloud: select this preset, enter your API key below, then save. The key is stored in this device’s secure storage, not in GitHub. For production distribution, use a server-side proxy so the provider key is never shipped to clients.</Text>
@@ -194,7 +239,7 @@ export default function Home(){
     <TextInput value={memoryDraft} onChangeText={setMemoryDraft} multiline style={s.input} placeholder="Preferences or details for Nia to remember" placeholderTextColor="#bbb"/>
     <Pressable onPress={saveMemoryNotes} style={s.secondary}><Text style={s.white}>Save memory notes</Text></Pressable>
     <Pressable onPress={async()=>{await AsyncStorage.removeItem('nia_memory_notes');setMemoryNotes('');setMemoryDraft('');}} style={s.secondary}><Text style={s.white}>Erase memory notes</Text></Pressable>
-    <Pressable onPress={clearHistory} style={s.secondary}><Text style={s.white}>Delete conversation history</Text></Pressable>
+    <Pressable disabled={busy||visionBusy} onPress={clearHistory} style={s.secondary}><Text style={s.white}>Delete conversation history</Text></Pressable>
    </View>:null}
   <Pressable onPress={callCapabilityNotice} style={s.secondary}><Text style={s.white}>Telephone assistant — dialer only</Text></Pressable>
   <TextInput style={s.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="Phone number" placeholderTextColor="#bbb"/>
@@ -202,8 +247,11 @@ export default function Home(){
   <Pressable style={s.secondary} onPress={async()=>{try{await openDialer(phone);}catch(e){Alert.alert('Cannot dial',String(e));}}}><Text style={s.white}>Open phone dialer</Text></Pressable>
   <Pressable onPress={shareHistory} style={s.secondary}><Text style={s.white}>Export conversation</Text></Pressable>
   <View style={s.history}>{messages.map((m,i)=><Text key={i} style={s.msg}>{m.role==='user'?'You':'Nia'}: {m.content}</Text>)}</View>
+  <Pressable style={s.secondary} disabled={voiceBusy||busy||visionBusy||!loaded} onPress={toggleVoice}><Text style={s.white}>{recording?'Stop recording and transcribe':voiceBusy?'Processing voice…':'Record voice message'}</Text></Pressable>
+  <Text style={s.note}>Recorded speech becomes a draft for you to review and send.</Text>
   <TextInput style={s.input} value={draft} onChangeText={setDraft} placeholder="Message Nia" placeholderTextColor="#bbb" multiline/>
-  <Pressable disabled={busy} style={s.button} onPress={send}><Text style={s.white}>{busy?'Thinking…':'Send'}</Text></Pressable>
+  <Pressable disabled={busy||visionBusy||voiceBusy||recording||!loaded} style={s.button} onPress={send}><Text style={s.white}>{busy?'Thinking…':'Send'}</Text></Pressable>
  </ScrollView>;
 }
 const s=StyleSheet.create({screen:{flex:1,backgroundColor:'#201724'},screenContent:{paddingTop:48,paddingHorizontal:20,paddingBottom:40},title:{fontSize:32,color:'#fff',fontWeight:'bold'},note:{color:'#e7bed8',marginVertical:12},history:{flex:1},msg:{color:'#fff',padding:10},input:{borderColor:'#ad86a5',borderWidth:1,borderRadius:10,padding:12,color:'#fff',marginTop:8},button:{backgroundColor:'#704566',padding:13,borderRadius:10,marginTop:10},secondary:{borderColor:'#704566',borderWidth:1,padding:10,borderRadius:10,marginTop:8},white:{color:'#fff',textAlign:'center'}});
+

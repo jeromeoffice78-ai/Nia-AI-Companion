@@ -18,14 +18,16 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Validate project
         run: |
           set -o pipefail
           npm test 2>&1 | tee nia-test.log
       - name: Align Expo dependency versions
-        run: CI=1 npx expo install --fix
+        run: CI=1 npx expo install --check
       - name: Recheck tests after Expo dependency alignment
         run: npm test
       - name: Check TypeScript
@@ -60,3 +62,4 @@ jobs:
             nia-test.log
             nia-typescript.log
           if-no-files-found: ignore
+

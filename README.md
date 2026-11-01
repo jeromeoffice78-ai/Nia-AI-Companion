@@ -1,11 +1,24 @@
-# Nia AI Relationship Companion
+# Nia AI Companion
 
-Android-first companion app built with Expo / React Native.
+Android companion app with chat, user-approved memory notes, a skeletal 3D avatar, opt-in photo interpretation, and recorded speech transcription to a reviewable draft.
 
-## Status
-Source import and Android build verification are in progress. This repository is **not yet an installable app**. A working APK, photorealistic rigged 3D avatar, autonomous in-app voice calling, and AI-assisted outgoing telephone calls have not been verified.
+## Validate
 
-The existing Jarvis repository remains separate. Never commit credentials, personal call recordings, or private conversation history.
+```
+npm ci
+npm test
+npm run typecheck
+npx expo install --check
+python3 scripts/verify_nia_rig.py assets/nia-character-animated.glb
+CI=1 npx expo export --platform android
+```
 
-## Source
-The source package is maintained separately pending import of all files, including the original avatar asset and Android build workflow.
+The Android workflows run checks before generating a debug APK. A successful bundle or structural rig check is not proof of a device-tested app.
+
+## Connection
+
+Use a separately deployed Nia gateway base URL and client token, or configure a trusted OpenAI-compatible endpoint. Tokens are kept in device secure storage. Conversation history and approved notes use device storage; they are not application-level encrypted. Direct Groq-compatible voice transcription requires a configured account and network access. Voice drafts are sent only after recording; review the text before sending chat.
+
+## Remaining release blockers
+
+No verified native floating 3D window, full duplex calls, unattended telephone agent, offline language model, or measured phoneme-aligned speech playback is included. Camera, microphone, notification delivery, GL rendering, and installation need Android hardware testing. Do not label a debug APK a completed production release.

@@ -1,3 +1,4 @@
+import {secureUrl,fetchWithTimeout} from './network';
 export type NiaRole='user'|'assistant';
 export type NiaMessage={role:NiaRole;content:string};
 export type NiaMode='companion'|'research'|'business';
@@ -7,10 +8,8 @@ export class NiaGatewayError extends Error{
  constructor(message:string,public readonly status?:number){super(message);this.name='NiaGatewayError';}
 }
 export function normalizeGatewayUrl(input:string):string{
- const url=input.trim().replace(/\/+$/,'');
- if(!/^https:\/\//i.test(url)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url)){
-  throw new NiaGatewayError('Gateway must use HTTPS (localhost is permitted for development).');
- }
+ let url:string;
+ try{url=secureUrl(input);}catch(e){throw new NiaGatewayError(String(e));}
  if(url.endsWith('/v1/chat')||url.endsWith('/health'))throw new NiaGatewayError('Enter the API base URL, not an endpoint path.');
  return url;
 }
@@ -19,7 +18,7 @@ export async function checkGateway(baseUrl:string):Promise<boolean>{
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),8000);
  try{
-  const response=await fetch(url+'/health',{signal:controller.signal});
+  const response=await fetchWithTimeout(url+'/health',{signal:controller.signal});
   if(!response.ok)return false;
   const body=await response.json();
   return body?.status==='ok'&&body?.service==='nia-api';
@@ -29,11 +28,11 @@ export async function chatWithGateway(settings:NiaGatewaySettings,messages:NiaMe
  const baseUrl=normalizeGatewayUrl(settings.baseUrl);
  if(!settings.clientToken.trim())throw new NiaGatewayError('Enter a gateway access token.');
  if(!messages.length)throw new NiaGatewayError('Conversation is empty.');
- if(messages.some(m=>!['user','assistant'].includes(m.role)||typeof m.content!=='string'||m.content.length>16000))throw new NiaGatewayError('Invalid or oversized conversation message.');
+ if(messages.slice(-40).some(m=>!['user','assistant'].includes(m.role)||typeof m.content!=='string'||!m.content.trim()||m.content.length>12000))throw new NiaGatewayError('Invalid or oversized conversation message.');
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),35000);
  try{
-  const response=await fetch(baseUrl+'/v1/chat',{
+  const response=await fetchWithTimeout(baseUrl+'/v1/chat',{
    method:'POST',signal:controller.signal,
    headers:{'Content-Type':'application/json',Authorization:'Bearer '+settings.clientToken},
    body:JSON.stringify({messages:messages.slice(-40),mode,flirty})
@@ -51,3 +50,4 @@ export async function chatWithGateway(settings:NiaGatewaySettings,messages:NiaMe
   throw new NiaGatewayError('Gateway connection failed: '+String(error));
  }finally{clearTimeout(timeout);}
 }
+

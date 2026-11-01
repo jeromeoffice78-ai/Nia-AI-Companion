@@ -23,11 +23,11 @@ jobs:
           test -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}" || { echo 'Android SDK not found on runner'; exit 1; }
           java -version
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Test
         run: npm test
       - name: Align Expo packages
-        run: CI=1 npx expo install --fix
+        run: CI=1 npx expo install --check
       - name: Type check
         run: npx tsc --noEmit
       - name: Require completed production avatar rig
@@ -56,3 +56,4 @@ jobs:
           name: nia-verified-rig-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+

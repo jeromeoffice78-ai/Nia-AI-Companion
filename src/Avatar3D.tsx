@@ -1,15 +1,17 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {View,Text,Pressable,StyleSheet,useWindowDimensions} from 'react-native';
+import {View,Text,Pressable,StyleSheet,useWindowDimensions,AppState} from 'react-native';
 import {GLView} from 'expo-gl';
 import {mountNiaGLB} from './loadNiaGLB';
 import {niaBundledModel} from './niaModel';
 import * as DocumentPicker from 'expo-document-picker';
 import {VisemeCue} from './visemes';
 type Motion='Idle'|'Walk'|'Dance'|'Wave';
-type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;dispose:()=>void};
-export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{speaking?:boolean;visemes?:VisemeCue[]}){
+const EMPTY_CUES:VisemeCue[]=[];
+type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setActive:(value:boolean)=>void;dispose:()=>void};
+export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_CUES}:{speaking?:boolean;visemes?:VisemeCue[]}){
  const {height}=useWindowDimensions();
  const avatarHeight=Math.max(240,Math.round(height*0.5));
+ const [autonomous,setAutonomous]=useState(true);
  const [motion,setMotion]=useState<Motion>('Idle');
  const [speaking,setSpeaking]=useState(false);
  const [error,setError]=useState('');
@@ -24,6 +26,8 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
  latestSpeaking.current=externalSpeaking||speaking;
  const loadGeneration=useRef(0);
  useEffect(()=>{disposed.current=false;return()=>{disposed.current=true;loadGeneration.current++;controller.current?.dispose();controller.current=null}},[]);
+ useEffect(()=>{const subscription=AppState.addEventListener('change',state=>controller.current?.setActive(state==='active'));return()=>subscription.remove();},[]);
+ useEffect(()=>{if(!autonomous)return;const timer=setInterval(()=>{if(AppState.currentState!=='active'||latestSpeaking.current)return;const options:Motion[]=['Idle','Wave','Idle','Dance'];const next=options[Math.floor(Math.random()*options.length)];if(controller.current?.play(next))setMotion(next);},10000);return()=>clearInterval(timer);},[autonomous]);
  useEffect(()=>{controller.current?.setSpeaking(externalSpeaking||speaking);},[externalSpeaking,speaking]);
  useEffect(()=>{controller.current?.setVisemes(visemes);},[visemes]);
  async function chooseRig(){
@@ -42,7 +46,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
   try{
    const mounted=await mountNiaGLB(gl,modelUri||niaBundledModel);
    if(disposed.current||generation!==loadGeneration.current){mounted.dispose();return;}
-   controller.current=mounted;
+   controller.current?.dispose();controller.current=mounted;mounted.setActive(AppState.currentState==='active');
    const d=mounted.diagnostics;
    if(!d.rigged||d.boneCount<1||d.skinnedMeshes<1){mounted.dispose();controller.current=null;setError('The installed model is not a valid rigged character. Release blocked until the approved model is bundled.');return;}
    setDiagnostics((d.rigged?'Rigged':'Invalid')+' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
@@ -51,13 +55,14 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
    if(latestCues.current.length)mounted.setVisemes(latestCues.current);
   }catch(e){if(!disposed.current&&generation===loadGeneration.current)setError(String(e));}
  }
- function select(next:Motion){if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}setError('');setMotion(next);}
+ function select(next:Motion){setAutonomous(false);if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}setError('');setMotion(next);}
  function toggleSpeaking(){setSpeaking(v=>{controller.current?.setSpeaking(!v);return !v;});}
  return <View style={s.wrap}>
   <GLView key={modelUri||'bundled'} style={[s.canvas,{height:avatarHeight}]} onContextCreate={onContextCreate}/>
   <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import Nia appearance rig (.glb)</Text></Pressable>
   {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Nia production character');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
   <Text style={s.caption}>Model: {loadedName}</Text>
+  <Pressable onPress={()=>setAutonomous(v=>!v)} style={s.btn}><Text style={s.txt}>Autonomous movement: {autonomous?'On':'Off'}</Text></Pressable>
   <Text selectable style={s.caption}>Diagnostics: {diagnostics}</Text>
   {error?<Text style={s.error}>Model loading failed: {error}</Text>:null}
   <View style={s.row}>{(['Idle','Walk','Dance','Wave'] as Motion[]).map(v=>
@@ -65,7 +70,8 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
     <Text style={s.txt}>{v}</Text>
    </Pressable>)}</View>
   <Pressable onPress={toggleSpeaking} style={[s.btn,s.speech]}><Text style={s.txt}>{speaking?'Stop mouth demo':'Test speaking animation'}</Text></Pressable>
-  <Text style={s.caption}>The approved Nia rig is required. Mouth movement currently follows speech playback state; verified phoneme synchronization is still required before release.</Text>
+  <Text style={s.caption}>The approved Nia rig is required. Spoken replies currently use device speech without aligned mouth animation. Verified phoneme synchronization is still required before release.</Text>
  </View>;
 }
 const s=StyleSheet.create({wrap:{marginVertical:10},canvas:{height:270,borderRadius:12},row:{flexDirection:'row',justifyContent:'center',gap:10,marginTop:8},btn:{padding:10,backgroundColor:'#503953',borderRadius:8},selected:{backgroundColor:'#97568d'},txt:{color:'#fff'},caption:{color:'#d8b7d3',fontSize:12,marginTop:7,textAlign:'center'},error:{color:'#ffb6b6',marginTop:8},speech:{alignSelf:'center',marginTop:8}});
+

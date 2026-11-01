@@ -1,13 +1,7 @@
-# Nia character integration status
+# Nia avatar integration
 
-The original Nia animated model was generated as a separate GLB artifact:
-`Nia-character-animated.glb` (Idle and Dance animation clips).
-The binary file is **not yet committed** to this GitHub repository.
+The saved candidate skeletal rig is now bundled at both required asset paths. It has 25 joints, Idle/Walk/Dance/Wave clips, and eight facial targets. Structural validation and actual Three.js loading/hand motion tests pass. This does not establish photorealistic likeness or device rendering quality.
 
-1. Upload the GLB as `assets/nia-character-animated.glb`.
-2. Update `src/niaModel.ts` to use `require('../assets/nia-character-animated.glb')`.
-3. Integrate `mountNiaGLB` into the active GLView and handle its async disposal.
-4. Test on Android hardware and verify clip playback.
-5. Replace the prototype with a properly rigged likeness model before claiming realistic movement.
+The renderer reads self-contained GLB files with the current Expo File API, disposes failed loaders, pauses rendering when backgrounded, and supports opt-in autonomous animation changes. Device speech does not provide an aligned audio clock: mouth timing remains unverified and is not fabricated from unrelated provider cues.
 
-The model is stylized and its clips only animate root motion. It is not a photorealistic reconstruction, a skeletal rig, or a lip-synced talking head.
+Native overlay and unattended telephone conversations remain unimplemented. The old native overlay is excluded from production configuration.

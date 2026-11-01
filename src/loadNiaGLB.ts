@@ -1,4 +1,7 @@
-import {Renderer,loadAsync} from 'expo-three';
+import Renderer from 'expo-three/build/Renderer';
+import {Asset} from 'expo-asset';
+import {File} from 'expo-file-system';
+import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import {VisemeCue,visemeAt,mouthOpenForViseme,validateVisemes} from './visemes';
 
@@ -17,7 +20,24 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  light.position.set(3,5,4);scene.add(light);
  const camera=new THREE.PerspectiveCamera(45,gl.drawingBufferWidth/gl.drawingBufferHeight,0.1,100);
  camera.position.set(0,1.25,4.5);
- const loaded:any=await loadAsync(assetModule);
+ let loaded:any;
+ try{
+  let uri:string;
+  if(typeof assetModule==='number'){
+   const asset=Asset.fromModule(assetModule);await asset.downloadAsync();
+   if(!asset.localUri)throw new Error('Bundled avatar could not be loaded');
+   uri=asset.localUri;
+  }else{uri=assetModule;}
+  const file=new File(uri);
+  if(file.size>25*1024*1024)throw new Error('Avatar exceeds 25 MB limit');
+  const bytes=await file.arrayBuffer();
+  const view=new DataView(bytes);
+  if(bytes.byteLength<20||view.getUint32(0,true)!==0x46546c67||view.getUint32(8,true)!==bytes.byteLength)throw new Error('Invalid binary GLB');
+  const length=view.getUint32(12,true);
+  const metadata=JSON.parse(new TextDecoder().decode(new Uint8Array(bytes,20,length)));
+  if([...(metadata.buffers||[]),...(metadata.images||[])].some(item=>item.uri))throw new Error('Use a self-contained GLB with embedded resources');
+  loaded=await new GLTFLoader().parseAsync(bytes,'');
+ }catch(error){renderer.dispose();throw error;}
  const model:THREE.Object3D=loaded.scene||loaded;
  // Bundled GLB is already Y-up; do not rotate it.
  scene.add(model);
@@ -97,11 +117,12 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  }
  play('Idle');
  const clock=new THREE.Clock();
- let active=true,frame=0;
+ let active=true,paused=false,frame=0;
  function tick(){
   if(!active)return;
   frame=requestAnimationFrame(tick);
   const elapsed=clock.getDelta();
+  if(paused)return;
   mixer.update(elapsed);
   const t=clock.elapsedTime;
   const delta=Math.min(elapsed,0.05);
@@ -143,9 +164,10 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   gl.endFrameEXP();
  }
  tick();
- return {diagnostics:{rigged,skinnedMeshes,boneCount,morphTargets:[...morphNames],animations:clips.map(c=>c.name)},play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
+ return {diagnostics:{rigged,skinnedMeshes,boneCount,morphTargets:[...morphNames],animations:clips.map(c=>c.name)},play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setActive(value:boolean){paused=!value;clock.getDelta();},setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
   active=false;cancelAnimationFrame(frame);mixer.stopAllAction();
-  scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();const mats=Array.isArray(o.material)?o.material:[o.material];for(const mat of mats)mat.dispose();}});
+  scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();const mats=Array.isArray(o.material)?o.material:[o.material];for(const mat of mats){for(const value of Object.values(mat)){if(value instanceof THREE.Texture)value.dispose();}mat.dispose();}}});
   renderer.dispose();
  }};
 }
+
