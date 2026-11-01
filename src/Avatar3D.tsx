@@ -25,7 +25,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=[]}:{s
  const loadGeneration=useRef(0);
  useEffect(()=>{disposed.current=false;return()=>{disposed.current=true;loadGeneration.current++;controller.current?.dispose();controller.current=null}},[]);
  useEffect(()=>{controller.current?.setSpeaking(externalSpeaking||speaking);},[externalSpeaking,speaking]);
- useEffect(()=>{if(visemes.length)controller.current?.setVisemes(visemes);},[visemes]);
+ useEffect(()=>{controller.current?.setVisemes(visemes);},[visemes]);
  async function chooseRig(){
   try{
    const selected=await DocumentPicker.getDocumentAsync({type:'*/*',copyToCacheDirectory:true});
