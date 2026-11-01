@@ -13,7 +13,7 @@ python3 scripts/verify_nia_rig.py assets/nia-character-animated.glb
 CI=1 npx expo export --platform android
 ```
 
-The Android workflows run checks before generating a debug APK. A successful bundle or structural rig check is not proof of a device-tested app.
+The Android workflows run checks before generating a standalone test APK with embedded JavaScript and avatar assets. A successful bundle or structural rig check is not proof of a device-tested app.
 
 ## Connection
 
@@ -21,4 +21,4 @@ Use a separately deployed Nia gateway base URL and client token, or configure a 
 
 ## Remaining release blockers
 
-No verified native floating 3D window, full duplex calls, unattended telephone agent, offline language model, or measured phoneme-aligned speech playback is included. Camera, microphone, notification delivery, GL rendering, and installation need Android hardware testing. Do not label a debug APK a completed production release.
+No verified native floating 3D window, full duplex calls, unattended telephone agent, offline language model, or measured phoneme-aligned speech playback is included. Camera, microphone, notification delivery, GL rendering, and installation need Android hardware testing. The generated release variant uses the Expo debug signing key for internal testing. Do not treat this as production signing or a completed production release.

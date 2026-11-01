@@ -24,7 +24,8 @@ test('production workflow rejects missing approved rig',()=>{
  const w=read('.github/workflows/android.yml');
  assert.match(w,/nia-appearance-facial-rig-v2.glb/);
  assert.match(w,/verify_nia_rig.py/);
- assert.match(w,/assembleDebug/);
+ assert.match(w,/assembleRelease/);
+ assert.match(w,/assets\/index.android.bundle/);
 });
 test('avatar renderer has animation, facial targets, and cleanup',()=>{
  const a=read('src/Avatar3D.tsx'),render=read('src/loadNiaGLB.ts');
@@ -56,3 +57,4 @@ test('rig facial animation requires timed visemes rather than fabricated speech 
  assert.match(renderer,/const fallbackLevel=visemeLevel\?\?0/);
  assert.doesNotMatch(renderer,/speaking\?'viseme_AA':null/);
 });
+

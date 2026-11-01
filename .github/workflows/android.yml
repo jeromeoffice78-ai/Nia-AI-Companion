@@ -1,4 +1,4 @@
-name: Build Android Debug APK
+name: Build Android Standalone Test APK
 on:
   workflow_dispatch:
   push:
@@ -43,15 +43,17 @@ jobs:
         run: python3 scripts/verify_nia_rig.py assets/nia-character-animated.glb
       - name: Generate Android project
         run: npx expo prebuild --platform android --non-interactive --clean
-      - name: Build debug APK
+      - name: Build standalone test APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Verify embedded application bundle
+        run: unzip -l android/app/build/outputs/apk/release/app-release.apk | grep 'assets/index.android.bundle'
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: nia-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: nia-standalone-test-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
       - name: Upload validation diagnostics
         if: always()
