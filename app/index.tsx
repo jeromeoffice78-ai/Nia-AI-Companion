@@ -10,13 +10,12 @@ import * as ImagePicker from 'expo-image-picker';
 import Avatar3D from '../src/Avatar3D';
 import {VisemeCue} from '../src/visemes';
 import {secureUrl,fetchWithTimeout} from '../src/network';
-import {parseHistory} from '../src/history';
+import {loadConversation,saveConversation,deleteConversation} from '../src/secureHistory';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
 
 type Message={role:'user'|'assistant';content:string};
-const MEMORY_KEY='nia_messages_v2';
 export default function Home(){
  const recorder=useAudioRecorder(RecordingPresets.HIGH_QUALITY);
  const recordingRef=useRef(false);
@@ -68,12 +67,12 @@ export default function Home(){
   (async()=>{
    try{
     const [entries,apiToken,accessToken,enabled]=await Promise.all([
-     AsyncStorage.multiGet([MEMORY_KEY,'nia_endpoint','nia_model','nia_flirty','nia_memory_notes','nia_assistant_mode','nia_gateway_url','nia_gateway_enabled']),
+     AsyncStorage.multiGet(['nia_endpoint','nia_model','nia_flirty','nia_memory_notes','nia_assistant_mode','nia_gateway_url','nia_gateway_enabled']),
      SecureStore.getItemAsync('nia_api_token'),SecureStore.getItemAsync('nia_gateway_token'),checkInsEnabled()
     ]);
     if(!active)return;
     const values=Object.fromEntries(entries);
-    if(values[MEMORY_KEY])setMessages(parseHistory(values[MEMORY_KEY]!));
+    setMessages(await loadConversation());
     setEndpoint(values.nia_endpoint||'');setModel(values.nia_model||'llama-3.3-70b-versatile');
     setFlirty(values.nia_flirty!=='false');
     const notes=values.nia_memory_notes||'';setMemoryNotes(notes);setMemoryDraft(notes);
@@ -110,7 +109,7 @@ export default function Home(){
   const history:Message[]=[...messages,{role:'user',content}].slice(-200) as Message[];
   try{
    // A failed disk write must not leave the app locked or drop the draft.
-   await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(history));
+   await saveConversation(history);
    setMessages(history);setDraft('');
    if(!useGateway&&!endpoint){Alert.alert('AI not connected','Configure an AI connection in Settings. Your message has been saved.');return;}
    let answer:string;
@@ -132,7 +131,7 @@ export default function Home(){
    }
    if(version!==historyVersion.current)return;
    const updated:Message[]=[...history,{role:'assistant',content:answer}];
-   await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));setMessages(updated);
+   await saveConversation(updated);setMessages(updated);
    // Timings for another audio recording cannot synchronize Expo Speech.
    if(speak)await say(answer);
   }catch(e){Alert.alert('Conversation unavailable',String(e));}
@@ -190,7 +189,7 @@ export default function Home(){
    if(typeof answer!=='string'||!answer.trim()||answer.length>16000)throw new Error('Vision response missing or too large');
    if(version!==historyVersion.current)return;
    const updated:Message[]=[...messages,{role:'user',content:'[Shared a camera photo] '+userQuestion},{role:'assistant',content:answer}];
-   await AsyncStorage.setItem(MEMORY_KEY,JSON.stringify(updated));setMessages(updated);setDraft('');
+   await saveConversation(updated);setMessages(updated);setDraft('');
    if(speak)await say(answer);
   }catch(error){Alert.alert('Vision unavailable',String(error));}
   finally{operation.current=false;setVisionBusy(false);}
@@ -212,7 +211,7 @@ export default function Home(){
   try {if(checkins){await disableCheckIns();setCheckins(false);}else{await enableCheckIns();setCheckins(true);}}
   catch(e){Alert.alert('Notifications unavailable',String(e));}
  }
- async function clearHistory(){if(operation.current)return;historyVersion.current++;speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await AsyncStorage.removeItem(MEMORY_KEY);setMessages([]);}
+ async function clearHistory(){if(operation.current)return;historyVersion.current++;speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await deleteConversation();setMessages([]);}
  return <ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
   <Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>
