@@ -147,7 +147,8 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   // Add small lifelike secondary motion to rigged characters as well as prototype pivots.
   if(headBone&&headRest){headBone.rotation.y=headRest.y+0.025*Math.sin(t*0.8);headBone.rotation.z=headRest.z+0.012*Math.sin(t*0.55);}
   if(spineBone&&spineRest){spineBone.rotation.x=spineRest.x+0.008*Math.sin(t*1.5);spineBone.rotation.z=spineRest.z+0.015*Math.sin(t*0.6);}
-  if(jawBone&&jawRest&&speaking&&cues.length){jawBone.rotation.x=jawRest.x+0.08*(mouthOpenForViseme(visemeAt(cues,(t-cueStartedAt)*1000)));}
+  if(jawBone&&jawRest&&cues.length&&speaking){jawBone.rotation.x=jawRest.x+0.08*mouthOpenForViseme(visemeAt(cues,(t-cueStartedAt)*1000));}
+  else if(jawBone&&jawRest&&!activeAction){jawBone.rotation.x=jawRest.x;}
   if(t>=blinkAt&&blinkStart<0){blinkStart=t;blinkAt=t+2.6+1.2*(0.5+0.5*Math.sin(t*3.1));}
   const blink=blinkStart<0?0:Math.max(0,Math.sin(Math.PI*Math.min(1,(t-blinkStart)/0.16)));
   if(blinkStart>=0&&t-blinkStart>0.16)blinkStart=-1;
@@ -166,7 +167,9 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
    if(!influences)continue;
    for(const [key,index] of Object.entries(dictionary)){
     const isBlink=key==='blinkLeft'||key==='blinkRight';
-    const wanted=isBlink?blink:(speaking&&target!==null&&key===target?(fallbackLevel??0):0);
+    // Preserve expression morphs driven by imported clips or other animation systems.
+    if(!isBlink&&!key.startsWith('viseme_'))continue;
+    const wanted=isBlink?blink:(speaking&&target!==null&&key===target?fallbackLevel:0);
     influences[index]+=(wanted-influences[index])*Math.min(1,delta*18);
    }
   }
