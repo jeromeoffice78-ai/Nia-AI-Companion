@@ -8,8 +8,8 @@ import {VisemeCue} from './visemes';
 import {DEMO_MOUTH_CUES,DEMO_CYCLE_MS} from './mouthDemo';
 import {chooseAutonomousMotion,type Motion} from './avatarMotion';
 const EMPTY_CUES:VisemeCue[]=[];
-type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;bodyRefinement:boolean;continuousPieces:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setActive:(value:boolean)=>void;dispose:()=>void};
-export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_CUES}:{speaking?:boolean;visemes?:VisemeCue[]}){
+type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;bodyRefinement:boolean;continuousPieces:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setPlaybackPosition:(value:number|null)=>void;setActive:(value:boolean)=>void;dispose:()=>void};
+export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_CUES,playbackMs=null}:{speaking?:boolean;visemes?:VisemeCue[];playbackMs?:number|null}){
  const {height}=useWindowDimensions();
  const avatarHeight=Math.max(240,Math.round(height*0.5));
  const [autonomous,setAutonomous]=useState(true);
@@ -23,9 +23,11 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
  const controller=useRef<Controller|null>(null);
  const disposed=useRef(false);
  const latestCues=useRef(visemes);
+ const latestPlayback=useRef(playbackMs);
  const latestSpeaking=useRef(externalSpeaking||speaking);
  const latestMotion=useRef<Motion>('Idle');
  latestCues.current=visemes;
+ latestPlayback.current=playbackMs;
  latestSpeaking.current=externalSpeaking||speaking;
  const loadGeneration=useRef(0);
  useEffect(()=>{disposed.current=false;return()=>{disposed.current=true;loadGeneration.current++;controller.current?.dispose();controller.current=null}},[]);
@@ -44,6 +46,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
  },[autonomous,externalSpeaking,speaking]);
  useEffect(()=>{controller.current?.setSpeaking(externalSpeaking||speaking);},[externalSpeaking,speaking]);
  useEffect(()=>{controller.current?.setVisemes(visemes);},[visemes]);
+ useEffect(()=>{controller.current?.setPlaybackPosition(playbackMs);},[playbackMs]);
  // Visible silent demonstration of the GLB facial morph targets. This timeline
  // has no recorded audio or phoneme alignment: it must never be used for speech.
  useEffect(()=>{
@@ -87,6 +90,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
      (d.bodyRefinement?' | continuous body pieces: '+d.continuousPieces:'')+
      ' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
    if(animated){
+     mounted.setPlaybackPosition(latestPlayback.current);
      mounted.play(latestMotion.current);
      mounted.setSpeaking(latestSpeaking.current);
    }

@@ -97,6 +97,7 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  let speaking=false;
  let cues:VisemeCue[]=[];
  let cueStartedAt=0;
+ let audioPlaybackMs:number|null=null;
  // Face details are parented to the head mesh, so they follow head motion.
  const eyes:THREE.Mesh[]=[];
  let mouth:THREE.Mesh|null=null;
@@ -190,17 +191,18 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   if(neck){neck.rotation.y=0.08*Math.sin(t*0.8);neck.rotation.z=0.035*Math.sin(t*0.55);}
   // Drive actual skeletal joints through the complete motion cycle.
   animateBody(t,delta);
-  if(jawBone&&jawRest&&cues.length&&speaking){jawBone.rotation.x=jawRest.x+0.08*mouthOpenForViseme(visemeAt(cues,(t-cueStartedAt)*1000));}
+  const cuePositionMs=audioPlaybackMs??((t-cueStartedAt)*1000);
+  if(jawBone&&jawRest&&cues.length&&speaking){jawBone.rotation.x=jawRest.x+0.08*mouthOpenForViseme(visemeAt(cues,cuePositionMs));}
   else if(jawBone&&jawRest){jawBone.rotation.x=jawRest.x;}
   if(t>=blinkAt&&blinkStart<0){blinkStart=t;blinkAt=t+2.6+1.2*(0.5+0.5*Math.sin(t*3.1));}
   const blink=blinkStart<0?0:Math.max(0,Math.sin(Math.PI*Math.min(1,(t-blinkStart)/0.16)));
   if(blinkStart>=0&&t-blinkStart>0.16)blinkStart=-1;
   for(const eye of eyes)eye.scale.y=0.09*(1-0.93*blink);
   speechLevel+=(Number(speaking)-speechLevel)*Math.min(1,delta*9);
-  const visemeLevel=cues.length?mouthOpenForViseme(visemeAt(cues,(t-cueStartedAt)*1000)):null;
+  const visemeLevel=cues.length?mouthOpenForViseme(visemeAt(cues,cuePositionMs)):null;
   if(mouth)mouth.scale.y=0.10+speechLevel*0.19*(visemeLevel??0);
   // Prefer true GLB facial blendshapes when the rig provides them.
-  const viseme= cues.length?visemeAt(cues,(t-cueStartedAt)*1000):'sil';
+  const viseme= cues.length?visemeAt(cues,cuePositionMs):'sil';
   const mapped:Record<string,string>={PP:'viseme_MBP',FF:'viseme_FV',aa:'viseme_AA',E:'viseme_EE',ih:'viseme_EE',oh:'viseme_OH',ou:'viseme_OH',nn:'viseme_L',DD:'viseme_L',RR:'viseme_OH'};
   const target=cues.length&&speaking?(viseme==='sil'?null:(mapped[viseme]||'viseme_AA')):null;
   const fallbackLevel=visemeLevel??0;
@@ -226,7 +228,8 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
    paused=!value;
    if(paused){cancelAnimationFrame(frame);clock.stop();}
    else if(wasPaused){clock.start();tick();}
-  },setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
+  },setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},
+  setPlaybackPosition(value:number|null){audioPlaybackMs=value===null?null:Math.max(0,Number.isFinite(value)?value:0);},dispose(){
   active=false;cancelAnimationFrame(frame);mixer.stopAllAction();
   scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();const mats=Array.isArray(o.material)?o.material:[o.material];for(const mat of mats){for(const value of Object.values(mat)){if(value instanceof THREE.Texture)value.dispose();}mat.dispose();}}});
   renderer.dispose();
