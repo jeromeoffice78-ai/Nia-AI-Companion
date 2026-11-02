@@ -16,7 +16,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
  const [speaking,setSpeaking]=useState(false);
  const [error,setError]=useState('');
  const [modelUri,setModelUri]=useState<string|null>(null);
- const [loadedName,setLoadedName]=useState('Nia production character');
+ const [loadedName,setLoadedName]=useState('Nia test rig — appearance not approved');
  const [diagnostics,setDiagnostics]=useState('Waiting for model');
  const controller=useRef<Controller|null>(null);
  const disposed=useRef(false);
@@ -72,7 +72,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
  return <View style={s.wrap}>
   <GLView key={modelUri||'bundled'} style={[s.canvas,{height:avatarHeight}]} onContextCreate={onContextCreate}/>
   <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import Nia appearance rig (.glb)</Text></Pressable>
-  {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Nia production character');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
+  {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Nia test rig — appearance not approved');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
   <Text style={s.caption}>Model: {loadedName}</Text>
   <Pressable onPress={()=>setAutonomous(v=>!v)} style={s.btn}><Text style={s.txt}>Autonomous movement: {autonomous?'On':'Off'}</Text></Pressable>
   <Text selectable style={s.caption}>Diagnostics: {diagnostics}</Text>
@@ -82,7 +82,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
     <Text style={s.txt}>{v}</Text>
    </Pressable>)}</View>
   <Pressable onPress={toggleSpeaking} style={[s.btn,s.speech]}><Text style={s.txt}>{speaking?'Stop mouth demo':'Test speaking animation'}</Text></Pressable>
-  <Text style={s.caption}>The approved Nia rig is required. Spoken replies currently use device speech without aligned mouth animation. Verified phoneme synchronization is still required before release.</Text>
+  <Text style={s.caption}>Current test rig is segmented and does not match Nia's approved likeness. Full-body motion is under verification. Device speech is not phoneme-aligned; production release remains blocked.</Text>
  </View>;
 }
 const s=StyleSheet.create({wrap:{marginVertical:10},canvas:{height:270,borderRadius:12},row:{flexDirection:'row',justifyContent:'center',gap:10,marginTop:8},btn:{padding:10,backgroundColor:'#503953',borderRadius:8},selected:{backgroundColor:'#97568d'},txt:{color:'#fff'},caption:{color:'#d8b7d3',fontSize:12,marginTop:7,textAlign:'center'},error:{color:'#ffb6b6',marginTop:8},speech:{alignSelf:'center',marginTop:8}});

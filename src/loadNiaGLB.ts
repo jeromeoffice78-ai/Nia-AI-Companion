@@ -4,6 +4,7 @@ import {File} from 'expo-file-system';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import {VisemeCue,visemeAt,mouthOpenForViseme,validateVisemes} from './visemes';
+import {computeBodyPose,REQUIRED_BODY_BONES} from './rigMotion';
 
 /**
  * Load a bundled GLB into the Nia OpenGL scene.
@@ -54,11 +55,7 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  const rightLeg=model.getObjectByName('rightLeg');
  const head=model.getObjectByName('head');
  const rigged=!!model.getObjectByName('Hips')&&!!model.getObjectByName('Head');
- const headBone=model.getObjectByName('Head');
- const spineBone=model.getObjectByName('Spine')||model.getObjectByName('Spine2');
  const jawBone=model.getObjectByName('Jaw')||model.getObjectByName('jaw');
- const headRest=headBone?.rotation.clone();
- const spineRest=spineBone?.rotation.clone();
  const jawRest=jawBone?.rotation.clone();
  const faceMeshes:THREE.Mesh[]=[];
  let skinnedMeshes=0;
@@ -114,6 +111,45 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   mouth.scale.set(0.45,0.10,0.12);
   head.add(mouth);
  }
+ // Preserve each GLB bone's bind/rest pose and let the mixer animate the
+ // authored clips. Motion offsets are layered onto currently unanimated
+ // joints, including hips, chest, knees, elbows, ankles, and hands.
+ const bodyRig=new Map<string,{node:THREE.Object3D;rotation:THREE.Euler;position:THREE.Vector3}>();
+ for(const name of REQUIRED_BODY_BONES){
+  const bone=model.getObjectByName(name);
+  if(bone)bodyRig.set(name,{node:bone,rotation:bone.rotation.clone(),position:bone.position.clone()});
+ }
+ const bodyOffsets=new Map<string,[number,number,number]>();
+ const rootHipsOffset=[0,0,0];
+ function animateBody(time:number,dt:number){
+  if(!rigged)return;
+  const pose=computeBodyPose(selected,time);
+  const alpha=Math.min(1,Math.max(0,dt)*8);
+  for(const [name,angles] of Object.entries(pose.rotations)){
+   const b=bodyRig.get(name);
+   if(!b)continue;
+   const previous=bodyOffsets.get(name)||[0,0,0];
+   const current:[number,number,number]=[
+    previous[0]+(angles[0]-previous[0])*alpha,
+    previous[1]+(angles[1]-previous[1])*alpha,
+    previous[2]+(angles[2]-previous[2])*alpha
+   ];
+   bodyOffsets.set(name,current);
+   // The original glTF clips already key these thigh quaternions, and
+   // own their Y/Z angles. Add only sagittal swing rather than replacing
+   // the authored animation.
+   if(name==='LeftUpperLeg'||name==='RightUpperLeg'){
+    b.node.rotation.x=b.rotation.x+current[0];
+   }else{
+    b.node.rotation.set(b.rotation.x+current[0],b.rotation.y+current[1],b.rotation.z+current[2]);
+   }
+  }
+  const hips=bodyRig.get('Hips');
+  if(hips){
+   for(let i=0;i<3;i++)rootHipsOffset[i]+=(pose.hips[i]-rootHipsOffset[i])*alpha;
+   hips.node.position.set(hips.position.x+rootHipsOffset[0],hips.position.y+rootHipsOffset[1],hips.position.z+rootHipsOffset[2]);
+  }
+ }
  let activeAction:THREE.AnimationAction|null=null;
  function play(name:'Idle'|'Walk'|'Dance'|'Wave'){
   const clip=clips.find(c=>c.name===(rigged?name:(name==='Wave'?'Idle':name)));
@@ -148,11 +184,10 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   if(leftHip)leftHip.rotation.x=blend*0.32*Math.sin(t*3.4);
   if(rightHip)rightHip.rotation.x=-blend*0.32*Math.sin(t*3.4);
   if(neck){neck.rotation.y=0.08*Math.sin(t*0.8);neck.rotation.z=0.035*Math.sin(t*0.55);}
-  // Add small lifelike secondary motion to rigged characters as well as prototype pivots.
-  if(headBone&&headRest){headBone.rotation.y=headRest.y+0.025*Math.sin(t*0.8);headBone.rotation.z=headRest.z+0.012*Math.sin(t*0.55);}
-  if(spineBone&&spineRest){spineBone.rotation.x=spineRest.x+0.008*Math.sin(t*1.5);spineBone.rotation.z=spineRest.z+0.015*Math.sin(t*0.6);}
+  // Drive actual skeletal joints through the complete motion cycle.
+  animateBody(t,delta);
   if(jawBone&&jawRest&&cues.length&&speaking){jawBone.rotation.x=jawRest.x+0.08*mouthOpenForViseme(visemeAt(cues,(t-cueStartedAt)*1000));}
-  else if(jawBone&&jawRest&&!activeAction){jawBone.rotation.x=jawRest.x;}
+  else if(jawBone&&jawRest){jawBone.rotation.x=jawRest.x;}
   if(t>=blinkAt&&blinkStart<0){blinkStart=t;blinkAt=t+2.6+1.2*(0.5+0.5*Math.sin(t*3.1));}
   const blink=blinkStart<0?0:Math.max(0,Math.sin(Math.PI*Math.min(1,(t-blinkStart)/0.16)));
   if(blinkStart>=0&&t-blinkStart>0.16)blinkStart=-1;
