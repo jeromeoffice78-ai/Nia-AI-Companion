@@ -9,7 +9,8 @@ test('Nia test rig gets continuous surfaces without losing the real skeleton',as
  const bytes=readFileSync('assets/nia-character-animated.glb');
  const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
  const model=gltf.scene;
- const before=model.getObjectByName('Left upper arm');
+ const before=model.children.find(x=>x.name.toLowerCase().replace(/[^a-z0-9]/g,'')==='leftupperarm');
+ assert.ok(before);
  const clips=gltf.animations.map(x=>x.name);
  const r=applyContinuousNiaBody(model);
  assert.equal(r.applied,true);
@@ -18,7 +19,7 @@ test('Nia test rig gets continuous surfaces without losing the real skeleton',as
  assert.equal(before.visible,false);
  assert.deepEqual(clips,['Idle','Walk','Dance','Wave']);
  const arm=model.getObjectByName('Nia continuous Left skin arm');
- assert.ok(arm instanceof SkinnedMesh);
+ assert.ok(arm?.isSkinnedMesh);
  assert.equal(arm.skeleton.bones.length,25);
  const weights=arm.geometry.getAttribute('skinWeight');
  for(let i=0;i<weights.count;i+=7){
@@ -26,7 +27,7 @@ test('Nia test rig gets continuous surfaces without losing the real skeleton',as
   assert.ok(Math.abs(total-1)<.0001,'Skin weights must sum to 1');
  }
  assert.equal(applyContinuousNiaBody(model).applied,false,'Must not duplicate geometry on reload');
- const face=model.getObjectByName('Facial lip sync blendshape controls');
+ const face=model.children.find(x=>x.name.toLowerCase().replace(/[^a-z0-9]/g,'')==='faciallipsyncblendshapecontrols');
  assert.ok(face?.morphTargetDictionary?.viseme_AA!==undefined);
 });
 test('continuous skin deforms under original glTF dance animation',async()=>{

@@ -80,8 +80,8 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
  const lookup=new Map<string,THREE.Object3D>();
  model.traverse(node=>{lookup.set(normalized(node.name),node);});
  const get=(name:string)=>lookup.get(normalized(name));
- const old=get('Hips pelvis');
- if(!(old instanceof THREE.SkinnedMesh)||!get('left shoulder seam')||
+ const old=get('Hips pelvis') as THREE.SkinnedMesh|undefined;
+ if(!old?.isSkinnedMesh||!get('left shoulder seam')||
     get('Nia continuous fitted torso'))return {applied:false,created:0,hidden:0};
  const skin=old.skeleton;
  const joints=new Map<string,number>(skin.bones.map((bone,i)=>[bone.name,i]));
@@ -91,8 +91,8 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
  if(required.some(name=>!joints.has(name)))return {applied:false,created:0,hidden:0};
  const materials:Record<string,THREE.Material>={};
  for(const [key,nodeName] of Object.entries({skin:'Left upper arm',shirt:'Chest shirt',shorts:'Hips pelvis'})){
-  const n=get(nodeName);
-  if(!(n instanceof THREE.Mesh))return {applied:false,created:0,hidden:0};
+  const n=get(nodeName) as THREE.Mesh|undefined;
+  if(!n?.isMesh)return {applied:false,created:0,hidden:0};
   materials[key]=(Array.isArray(n.material)?n.material[0]:n.material).clone();
  }
  const generated:THREE.SkinnedMesh[]=[];
