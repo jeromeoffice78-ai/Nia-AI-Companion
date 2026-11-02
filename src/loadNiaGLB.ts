@@ -130,10 +130,9 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  const clock=new THREE.Clock();
  let active=true,paused=false,frame=0;
  function tick(){
-  if(!active)return;
+  if(!active||paused)return;
   frame=requestAnimationFrame(tick);
   const elapsed=clock.getDelta();
-  if(paused)return;
   mixer.update(elapsed);
   const t=clock.elapsedTime;
   const delta=Math.min(elapsed,0.05);
@@ -182,7 +181,13 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   gl.endFrameEXP();
  }
  tick();
- return {diagnostics:{rigged,skinnedMeshes,boneCount,morphTargets:[...morphNames],animations:clips.map(c=>c.name)},play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setActive(value:boolean){paused=!value;clock.getDelta();},setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
+ return {diagnostics:{rigged,skinnedMeshes,boneCount,morphTargets:[...morphNames],animations:clips.map(c=>c.name)},play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setActive(value:boolean){
+   if(!active)return;
+   const wasPaused=paused;
+   paused=!value;
+   if(paused){cancelAnimationFrame(frame);clock.stop();}
+   else if(wasPaused){clock.start();tick();}
+  },setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},dispose(){
   active=false;cancelAnimationFrame(frame);mixer.stopAllAction();
   scene.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();const mats=Array.isArray(o.material)?o.material:[o.material];for(const mat of mats){for(const value of Object.values(mat)){if(value instanceof THREE.Texture)value.dispose();}mat.dispose();}}});
   renderer.dispose();

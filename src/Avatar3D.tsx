@@ -5,7 +5,7 @@ import {mountNiaGLB} from './loadNiaGLB';
 import {niaBundledModel} from './niaModel';
 import * as DocumentPicker from 'expo-document-picker';
 import {VisemeCue} from './visemes';
-type Motion='Idle'|'Walk'|'Dance'|'Wave';
+import {chooseAutonomousMotion,type Motion} from './avatarMotion';
 const EMPTY_CUES:VisemeCue[]=[];
 type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setActive:(value:boolean)=>void;dispose:()=>void};
 export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_CUES}:{speaking?:boolean;visemes?:VisemeCue[]}){
@@ -22,12 +22,24 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
  const disposed=useRef(false);
  const latestCues=useRef(visemes);
  const latestSpeaking=useRef(externalSpeaking||speaking);
+ const latestMotion=useRef<Motion>('Idle');
  latestCues.current=visemes;
  latestSpeaking.current=externalSpeaking||speaking;
  const loadGeneration=useRef(0);
  useEffect(()=>{disposed.current=false;return()=>{disposed.current=true;loadGeneration.current++;controller.current?.dispose();controller.current=null}},[]);
  useEffect(()=>{const subscription=AppState.addEventListener('change',state=>controller.current?.setActive(state==='active'));return()=>subscription.remove();},[]);
- useEffect(()=>{if(!autonomous)return;const timer=setInterval(()=>{if(AppState.currentState!=='active'||latestSpeaking.current)return;const options:Motion[]=['Idle','Wave','Idle','Dance'];const next=options[Math.floor(Math.random()*options.length)];if(controller.current?.play(next))setMotion(next);},10000);return()=>clearInterval(timer);},[autonomous]);
+ useEffect(()=>{if(!autonomous)return;const timer=setInterval(()=>{
+  if(AppState.currentState!=='active')return;
+  const next=chooseAutonomousMotion(latestSpeaking.current,latestMotion.current,Math.random());
+  if(controller.current?.play(next)){latestMotion.current=next;setMotion(next);}
+ },10000);return()=>clearInterval(timer);},[autonomous]);
+ // Speech starts a full-body gesture as well as any facial cues. This is motion,
+ // not a claim of phoneme sync: Expo Speech supplies no timed audio phonemes.
+ useEffect(()=>{
+  if(!autonomous||!(externalSpeaking||speaking)||AppState.currentState!=='active')return;
+  const next=chooseAutonomousMotion(true,latestMotion.current,Math.random());
+  if(controller.current?.play(next)){latestMotion.current=next;setMotion(next);}
+ },[autonomous,externalSpeaking,speaking]);
  useEffect(()=>{controller.current?.setSpeaking(externalSpeaking||speaking);},[externalSpeaking,speaking]);
  useEffect(()=>{controller.current?.setVisemes(visemes);},[visemes]);
  async function chooseRig(){
@@ -50,12 +62,12 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    const d=mounted.diagnostics;
    if(!d.rigged||d.boneCount<1||d.skinnedMeshes<1){mounted.dispose();controller.current=null;setError('The installed model is not a valid rigged character. Release blocked until the approved model is bundled.');return;}
    setDiagnostics((d.rigged?'Rigged':'Invalid')+' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
-   mounted.play(motion);
+   mounted.play(latestMotion.current);
    mounted.setSpeaking(latestSpeaking.current);
    if(latestCues.current.length)mounted.setVisemes(latestCues.current);
   }catch(e){if(!disposed.current&&generation===loadGeneration.current){const details=e instanceof Error?(e.stack||e.message):String(e);setError(details);setDiagnostics('Avatar initialization error');}}
  }
- function select(next:Motion){setAutonomous(false);if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}setError('');setMotion(next);}
+ function select(next:Motion){setAutonomous(false);if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}latestMotion.current=next;setError('');setMotion(next);}
  function toggleSpeaking(){setSpeaking(v=>{controller.current?.setSpeaking(!v);return !v;});}
  return <View style={s.wrap}>
   <GLView key={modelUri||'bundled'} style={[s.canvas,{height:avatarHeight}]} onContextCreate={onContextCreate}/>
