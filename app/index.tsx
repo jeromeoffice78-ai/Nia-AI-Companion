@@ -4,7 +4,8 @@ import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert,Share,AppState
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
-import {useAudioRecorder,RecordingPresets,requestRecordingPermissionsAsync,setAudioModeAsync} from 'expo-audio';
+import {useAudioRecorder,RecordingPresets,requestRecordingPermissionsAsync,setAudioModeAsync,createAudioPlayer} from 'expo-audio';
+import {requestAlignedSpeech,AlignedSpeechUnavailable} from '../src/alignedSpeech';
 import {transcribeAudio} from '../src/voice';
 import {CameraView,useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -37,6 +38,7 @@ export default function Home(){
  const [speak,setSpeak]=useState(true);
  const [avatarSpeaking,setAvatarSpeaking]=useState(false);
  const [visemeCues,setVisemeCues]=useState<VisemeCue[]>([]);
+ const [audioPositionMs,setAudioPositionMs]=useState<number|null>(null);
  const [checkins,setCheckins]=useState(false);
  const [flirty,setFlirty]=useState(true);
  const [cameraVisible,setCameraVisible]=useState(false);
@@ -49,15 +51,17 @@ export default function Home(){
  const operation=useRef(false);
  const historyVersion=useRef(0);
  const speechVersion=useRef(0);
+ const alignedPlayer=useRef<{stop:()=>void}|null>(null);
  const [loaded,setLoaded]=useState(false);
- useEffect(()=>()=>{void Speech.stop();},[]);
+ useEffect(()=>()=>{alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();},[]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
    if(state!=='active'){
     speechVersion.current++;setCameraVisible(false);
     if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{});operation.current=false;}
+    alignedPlayer.current?.stop();alignedPlayer.current=null;
     void Speech.stop();
-    setAvatarSpeaking(false);
+    setAvatarSpeaking(false);setAudioPositionMs(null);
     setVisemeCues([]);
    }
   });
@@ -96,10 +100,44 @@ export default function Home(){
  }
  async function say(answer:string){
   const version=++speechVersion.current;
+  alignedPlayer.current?.stop();alignedPlayer.current=null;
   await Speech.stop();
   if(version!==speechVersion.current||AppState.currentState!=='active')return;
-  setVisemeCues([]);setAvatarSpeaking(true);
-  const done=()=>{if(version===speechVersion.current){setAvatarSpeaking(false);setVisemeCues([]);}};
+  setVisemeCues([]);setAudioPositionMs(null);setAvatarSpeaking(false);
+  const done=()=>{
+   if(version!==speechVersion.current)return;
+   alignedPlayer.current?.stop();alignedPlayer.current=null;
+   setAvatarSpeaking(false);setAudioPositionMs(null);setVisemeCues([]);
+  };
+  if(useGateway&&gatewayToken.trim()){
+   try{
+    // Audio and phoneme positions must come from the SAME synthesis.
+    // Never use text-derived viseme timing for a separate Android TTS voice.
+    const aligned=await requestAlignedSpeech(gatewayUrl,gatewayToken,answer);
+    if(version!==speechVersion.current||AppState.currentState!=='active')return;
+    const player=createAudioPlayer({uri:aligned.audioUri,headers:aligned.audioHeaders},{updateInterval:50});
+    let closed=false;
+    const subscription=player.addListener('playbackStatusUpdate',status=>{
+     if(closed||version!==speechVersion.current)return;
+     if(status.error||status.didJustFinish){done();return;}
+     if(status.playing&&status.isLoaded&&Number.isFinite(status.currentTime))
+      setAudioPositionMs(Math.max(0,Math.round(status.currentTime*1000)));
+    });
+    alignedPlayer.current={stop:()=>{
+     if(closed)return;closed=true;subscription.remove();player.pause();player.remove();
+    }};
+    setAudioPositionMs(0);setVisemeCues(aligned.cues);setAvatarSpeaking(true);
+    player.play();return;
+   }catch(error){
+    if(version!==speechVersion.current)return;
+    alignedPlayer.current?.stop();alignedPlayer.current=null;
+    if(!(error instanceof AlignedSpeechUnavailable&&error.unavailable))
+     Alert.alert('Aligned voice unavailable','Using Android speech without synchronized lip movements. '+String(error));
+   }
+  }
+  // Expo Speech does not expose real audio phoneme offsets: unaligned fallback.
+  if(version!==speechVersion.current||AppState.currentState!=='active')return;
+  setVisemeCues([]);setAudioPositionMs(null);setAvatarSpeaking(true);
   try{Speech.speak(answer,{language:'en-US',onDone:done,onStopped:done,onError:done});}catch{done();}
  }
  async function send(){
@@ -154,7 +192,7 @@ export default function Home(){
     if(!token.trim())throw new Error('Save your AI connection token first.');
     const permission=await requestRecordingPermissionsAsync();
     if(!permission.granted)throw new Error('Microphone permission was not granted.');
-    speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);
+    speechVersion.current++;alignedPlayer.current?.stop();alignedPlayer.current=null;await Speech.stop();setAvatarSpeaking(false);setAudioPositionMs(null);
     await setAudioModeAsync({allowsRecording:true,playsInSilentMode:true});
     if(AppState.currentState!=='active')throw new Error('Return to Nia before recording.');
     await recorder.prepareToRecordAsync();
@@ -212,10 +250,10 @@ export default function Home(){
   try {if(checkins){await disableCheckIns();setCheckins(false);}else{await enableCheckIns();setCheckins(true);}}
   catch(e){Alert.alert('Notifications unavailable',String(e));}
  }
- async function clearHistory(){if(operation.current)return;historyVersion.current++;speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await deleteConversation();setMessages([]);}
+ async function clearHistory(){if(operation.current)return;historyVersion.current++;speechVersion.current++;alignedPlayer.current?.stop();alignedPlayer.current=null;await Speech.stop();setAvatarSpeaking(false);setAudioPositionMs(null);setVisemeCues([]);await deleteConversation();setMessages([]);}
  return <SafeAreaView style={s.screen} edges={['top','bottom']}><ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
-  <Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>
+  <Avatar3D speaking={avatarSpeaking} visemes={visemeCues} playbackMs={audioPositionMs}/>
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
   {cameraVisible?<View><CameraView ref={cameraRef} style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
@@ -237,6 +275,7 @@ export default function Home(){
     <TextInput value={token} onChangeText={setToken} style={s.input} secureTextEntry placeholder="GroqCloud API key (private)" placeholderTextColor="#bbb"/>
     <Pressable onPress={saveConfig} style={s.button}><Text style={s.white}>Save settings</Text></Pressable>
     <Pressable onPress={()=>setSpeak(!speak)} style={s.secondary}><Text style={s.white}>Spoken replies: {speak?'On':'Off'}</Text></Pressable>
+    <Text style={s.note}>Timed lip sync requires a gateway providing audio and matching viseme timing from one synthesis; Android device speech remains unaligned.</Text>
     <Pressable onPress={toggleCheckins} style={s.secondary}><Text style={s.white}>Daytime check-ins: {checkins?'On':'Off'}</Text></Pressable>
     <Text style={s.note}>Memory notes — only information you choose to save</Text>
     <TextInput value={memoryDraft} onChangeText={setMemoryDraft} multiline style={s.input} placeholder="Preferences or details for Nia to remember" placeholderTextColor="#bbb"/>
