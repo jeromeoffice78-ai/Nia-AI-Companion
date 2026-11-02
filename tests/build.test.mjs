@@ -20,9 +20,11 @@ test('3D asset exists with valid glTF binary header',()=>{
  assert.equal(b.toString('ascii',0,4),'glTF');
  assert.equal(b.readUInt32LE(4),2);
 });
-test('production workflow rejects missing approved rig',()=>{
+test('internal Android build validates active rig and separate production gate remains blocked',()=>{
  const w=read('.github/workflows/android.yml');
- assert.match(w,/nia-appearance-facial-rig-v2.glb/);
+ assert.match(w,/nia-character-animated.glb/);
+ assert.doesNotMatch(w,/cp assets\/nia-appearance-facial-rig-v2\.glb/);
+ assert.match(read('.github/workflows/production-readiness.yml'),/verify_nia_production\.py/);
  assert.match(w,/verify_nia_rig.py/);
  assert.match(w,/assembleRelease/);
  assert.match(w,/assets\/index.android.bundle/);
