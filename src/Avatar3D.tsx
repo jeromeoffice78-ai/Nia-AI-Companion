@@ -5,6 +5,7 @@ import {mountNiaGLB} from './loadNiaGLB';
 import {niaBundledModel} from './niaModel';
 import * as DocumentPicker from 'expo-document-picker';
 import {VisemeCue} from './visemes';
+import {DEMO_MOUTH_CUES,DEMO_CYCLE_MS} from './mouthDemo';
 import {chooseAutonomousMotion,type Motion} from './avatarMotion';
 const EMPTY_CUES:VisemeCue[]=[];
 type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setActive:(value:boolean)=>void;dispose:()=>void};
@@ -42,6 +43,15 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
  },[autonomous,externalSpeaking,speaking]);
  useEffect(()=>{controller.current?.setSpeaking(externalSpeaking||speaking);},[externalSpeaking,speaking]);
  useEffect(()=>{controller.current?.setVisemes(visemes);},[visemes]);
+ // Visible silent demonstration of the GLB facial morph targets. This timeline
+ // has no recorded audio or phoneme alignment: it must never be used for speech.
+ useEffect(()=>{
+  if(!speaking||externalSpeaking)return;
+  const start=()=>{if(AppState.currentState==='active')controller.current?.setVisemes(DEMO_MOUTH_CUES);};
+  start();
+  const timer=setInterval(start,DEMO_CYCLE_MS);
+  return()=>{clearInterval(timer);controller.current?.setVisemes([]);};
+ },[speaking,externalSpeaking]);
  async function chooseRig(){
   try{
    const selected=await DocumentPicker.getDocumentAsync({type:'*/*',copyToCacheDirectory:true});
@@ -64,7 +74,8 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    setDiagnostics((d.rigged?'Rigged':'Invalid')+' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
    mounted.play(latestMotion.current);
    mounted.setSpeaking(latestSpeaking.current);
-   if(latestCues.current.length)mounted.setVisemes(latestCues.current);
+   if(speaking&&!externalSpeaking)mounted.setVisemes(DEMO_MOUTH_CUES);
+   else if(latestCues.current.length)mounted.setVisemes(latestCues.current);
   }catch(e){if(!disposed.current&&generation===loadGeneration.current){const details=e instanceof Error?(e.stack||e.message):String(e);setError(details);setDiagnostics('Avatar initialization error');}}
  }
  function select(next:Motion){setAutonomous(false);if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}latestMotion.current=next;setError('');setMotion(next);}
@@ -81,7 +92,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    <Pressable key={v} onPress={()=>select(v)} style={[s.btn,motion===v&&s.selected]}>
     <Text style={s.txt}>{v}</Text>
    </Pressable>)}</View>
-  <Pressable onPress={toggleSpeaking} style={[s.btn,s.speech]}><Text style={s.txt}>{speaking?'Stop mouth demo':'Test speaking animation'}</Text></Pressable>
+  <Pressable onPress={toggleSpeaking} style={[s.btn,s.speech]}><Text style={s.txt}>{speaking?'Stop silent mouth demo':'Test facial animation (silent)'}</Text></Pressable>
   <Text style={s.caption}>Current test rig is segmented and does not match Nia's approved likeness. Full-body motion is under verification. Device speech is not phoneme-aligned; production release remains blocked.</Text>
  </View>;
 }
