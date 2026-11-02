@@ -12,5 +12,6 @@ test('unfinished native floating overlay is not included in production app',()=>
 test('approved avatar is required by Android release',()=>{
  const workflow=read('.github/workflows/android.yml');
  assert.match(workflow,/verify_nia_rig.py/);
- assert.match(workflow,/nia-appearance-facial-rig-v2.glb/);
+ assert.match(workflow,/nia-character-animated.glb/);
+ assert.doesNotMatch(workflow,/cp assets\/nia-appearance-facial-rig-v2\.glb/);
 });
