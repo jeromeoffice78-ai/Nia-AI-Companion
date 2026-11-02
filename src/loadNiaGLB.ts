@@ -5,6 +5,7 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import {VisemeCue,visemeAt,mouthOpenForViseme,validateVisemes} from './visemes';
 import {computeBodyPose,REQUIRED_BODY_BONES} from './rigMotion';
+import {applyContinuousNiaBody} from './continuousBody';
 
 /**
  * Load a bundled GLB into the Nia OpenGL scene.
@@ -46,6 +47,8 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   loaded=await new GLTFLoader().parseAsync(bytes,'');
  }catch(error){renderer.dispose();const message=error instanceof Error?error.message:String(error);throw new Error('Nia GLB '+stage+': '+message,{cause:error});}
  const model:THREE.Object3D=loaded.scene||loaded;
+ // Only refine the known segmented test rig. Approved future rig assets are unchanged.
+ const refinement=applyContinuousNiaBody(model);
  // Bundled GLB is already Y-up; do not rotate it.
  scene.add(model);
  const clips:THREE.AnimationClip[]=loaded.animations||[];
@@ -217,7 +220,7 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
   gl.endFrameEXP();
  }
  tick();
- return {diagnostics:{rigged,skinnedMeshes,boneCount,morphTargets:[...morphNames],animations:clips.map(c=>c.name)},play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setActive(value:boolean){
+ return {diagnostics:{rigged,skinnedMeshes,boneCount,bodyRefinement:refinement.applied,continuousPieces:refinement.created,morphTargets:[...morphNames],animations:clips.map(c=>c.name)},play,setSpeaking(value:boolean){speaking=value;if(!value)cues=[]},setActive(value:boolean){
    if(!active)return;
    const wasPaused=paused;
    paused=!value;

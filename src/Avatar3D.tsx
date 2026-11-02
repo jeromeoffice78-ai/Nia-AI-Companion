@@ -8,7 +8,7 @@ import {VisemeCue} from './visemes';
 import {DEMO_MOUTH_CUES,DEMO_CYCLE_MS} from './mouthDemo';
 import {chooseAutonomousMotion,type Motion} from './avatarMotion';
 const EMPTY_CUES:VisemeCue[]=[];
-type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setActive:(value:boolean)=>void;dispose:()=>void};
+type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;bodyRefinement:boolean;continuousPieces:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setActive:(value:boolean)=>void;dispose:()=>void};
 export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_CUES}:{speaking?:boolean;visemes?:VisemeCue[]}){
  const {height}=useWindowDimensions();
  const avatarHeight=Math.max(240,Math.round(height*0.5));
@@ -84,6 +84,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    setStaticPreview(!animated);
    setDiagnostics((animated?'Rigged internal animation test':'Static appearance preview — animation unavailable')+
      ' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+
+     (d.bodyRefinement?' | continuous body pieces: '+d.continuousPieces:'')+
      ' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
    if(animated){
      mounted.play(latestMotion.current);
