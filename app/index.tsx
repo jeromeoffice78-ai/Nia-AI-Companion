@@ -1,4 +1,5 @@
 import React,{useEffect,useState,useRef} from 'react';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {View,Text,TextInput,Pressable,ScrollView,StyleSheet,Alert,Share,AppState} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -212,7 +213,7 @@ export default function Home(){
   catch(e){Alert.alert('Notifications unavailable',String(e));}
  }
  async function clearHistory(){if(operation.current)return;historyVersion.current++;speechVersion.current++;await Speech.stop();setAvatarSpeaking(false);setVisemeCues([]);await deleteConversation();setMessages([]);}
- return <ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
+ return <SafeAreaView style={s.screen} edges={['top','bottom']}><ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
   <Avatar3D speaking={avatarSpeaking} visemes={visemeCues}/>
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
@@ -253,7 +254,7 @@ export default function Home(){
   <Text style={s.note}>Recorded speech becomes a draft for you to review and send.</Text>
   <TextInput style={s.input} value={draft} onChangeText={setDraft} placeholder="Message Nia" placeholderTextColor="#bbb" multiline/>
   <Pressable disabled={busy||visionBusy||voiceBusy||recording||!loaded} style={s.button} onPress={send}><Text style={s.white}>{busy?'Thinking…':'Send'}</Text></Pressable>
- </ScrollView>;
+ </ScrollView></SafeAreaView>;
 }
-const s=StyleSheet.create({screen:{flex:1,backgroundColor:'#201724'},screenContent:{paddingTop:48,paddingHorizontal:20,paddingBottom:40},title:{fontSize:32,color:'#fff',fontWeight:'bold'},note:{color:'#e7bed8',marginVertical:12},history:{flex:1},msg:{color:'#fff',padding:10},input:{borderColor:'#ad86a5',borderWidth:1,borderRadius:10,padding:12,color:'#fff',marginTop:8},button:{backgroundColor:'#704566',padding:13,borderRadius:10,marginTop:10},secondary:{borderColor:'#704566',borderWidth:1,padding:10,borderRadius:10,marginTop:8},white:{color:'#fff',textAlign:'center'}});
+const s=StyleSheet.create({screen:{flex:1,backgroundColor:'#201724'},screenContent:{paddingTop:16,paddingHorizontal:20,paddingBottom:28,flexGrow:1},title:{fontSize:32,color:'#fff',fontWeight:'bold'},note:{color:'#e7bed8',marginVertical:12},history:{flex:1},msg:{color:'#fff',padding:10},input:{borderColor:'#ad86a5',borderWidth:1,borderRadius:10,padding:12,color:'#fff',marginTop:8},button:{backgroundColor:'#704566',padding:13,borderRadius:10,marginTop:10},secondary:{borderColor:'#704566',borderWidth:1,padding:10,borderRadius:10,marginTop:8},white:{color:'#fff',textAlign:'center'}});
 
