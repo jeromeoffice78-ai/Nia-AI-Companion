@@ -1,0 +1,1 @@
+{"name":"nia-secure-gateway","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node nia-server.mjs","test":"node --test test/*.test.mjs"},"dependencies":{"microsoft-cognitiveservices-speech-sdk":"^1.44.0"}}
