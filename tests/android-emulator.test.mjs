@@ -18,4 +18,6 @@ test('emulator smoke uses built APK and waits for Android cold-start UI diagnost
  assert.match(script,/::error::Nia did not display/);
  assert.doesNotMatch(script,/if ! adb shell pidof/);
  assert.match(script,/sleep 6/);
+ assert.match(script,/local phase="\\$1" i\\n  local ui=/);
+ assert.doesNotMatch(script,/local phase="\\$1" i ui=/);
 });

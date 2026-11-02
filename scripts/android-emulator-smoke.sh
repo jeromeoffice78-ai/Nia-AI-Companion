@@ -23,7 +23,8 @@ capture() {
 }
 
 verify_scene() {
-  local phase="$1" i ui="$OUT/$phase-ui.xml"
+  local phase="$1" i
+  local ui="$OUT/$phase-ui.xml"
   # Slow software GL / cold Android initialization can take substantially
   # longer than the old 5-second pidof check. Poll for visible diagnostics.
   for i in $(seq 1 24); do
