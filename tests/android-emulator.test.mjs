@@ -20,4 +20,7 @@ test('emulator smoke uses built APK and waits for Android cold-start UI diagnost
  assert.match(script,/sleep 6/);
  assert.ok(script.includes('  local phase="$1" i\n  local ui="$OUT/$phase-ui.xml"'));
  assert.ok(!script.includes('local phase="$1" i ui='));
+ assert.match(script,/Pixel Launcher isn/);
+ assert.match(script,/android:id\/aerr_wait/);
+ assert.match(script,/ET\.parse\(sys\.argv\[1\]\)/);
 });

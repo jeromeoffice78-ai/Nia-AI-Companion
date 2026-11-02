@@ -30,6 +30,28 @@ verify_scene() {
   for i in $(seq 1 24); do
     adb shell uiautomator dump /sdcard/nia-smoke-ui.xml >"$OUT/$phase-dump.txt" 2>&1 || true
     adb exec-out cat /sdcard/nia-smoke-ui.xml >"$ui" 2>/dev/null || true
+    # The emulator's Pixel Launcher sometimes reports ANR over a running app.
+    # Only dismiss the explicit system Wait dialog; never dismiss Nia errors.
+    if grep -q 'Pixel Launcher isn' "$ui" && grep -q 'android:id/aerr_wait' "$ui"; then
+      echo "Emulator launcher ANR overlay detected; choosing Wait to inspect Nia"
+      coords="$(python3 - "$ui" <<'PY'
+import re,sys,xml.etree.ElementTree as ET
+try:
+    root=ET.parse(sys.argv[1]).getroot()
+    for node in root.iter('node'):
+        if node.get('resource-id')=='android:id/aerr_wait':
+            nums=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
+            if len(nums)==4:
+                print((nums[0]+nums[2])//2,(nums[1]+nums[3])//2)
+                break
+except (ET.ParseError, OSError, ValueError):
+    pass
+PY
+)"
+      if [ -n "$coords" ]; then adb shell input tap $coords; fi
+      sleep 2
+      continue
+    fi
     if grep -q 'Model loading failed:' "$ui"; then
       capture "$phase-glb-error"
       echo "::error::Nia showed a GLB load failure during $phase"
