@@ -1,0 +1,16 @@
+name: Nia Production Readiness (requires approved assets)
+on:
+  workflow_dispatch:
+jobs:
+  production-preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate user-approved production avatar, not test mannequin
+        run: python3 scripts/verify_nia_production.py assets/nia-production-approved.glb
+      - name: Verify the remaining release prerequisites
+        run: |
+          echo "::error::Release requires measured phoneme-synchronized audio, verified native floating-window operation and physical-device feature acceptance."
+          exit 1

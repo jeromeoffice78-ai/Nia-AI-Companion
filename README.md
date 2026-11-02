@@ -26,3 +26,21 @@ The `Build Android Standalone Test APK` workflow now installs the resulting APK 
 ## Remaining release blockers
 
 No verified native floating 3D window, full duplex calls, unattended telephone agent, offline language model, or measured phoneme-aligned speech playback is included. Camera, microphone, notification delivery, GL rendering, and installation need Android hardware testing. The generated release variant uses the Expo debug signing key for internal testing. Do not treat this as production signing or a completed production release.
+
+## Production release control
+
+The existing GLB in `assets/nia-appearance-facial-rig-v2.glb` identifies itself
+as a **facial-rig prototype** and has no embedded texture images. It is appropriate
+only for testing the renderer. Do not call it an approved realistic likeness.
+
+The separate, manually triggered `Nia Production Readiness` workflow now
+requires a distinct `assets/nia-production-approved.glb`, an approval manifest
+(`docs/nia-production-approval.json` with the SHA-256, likeness review, and
+physical Android visual-test flags), as well as verified audio/overlay behavior.
+It currently **fails closed**: the production asset and end-to-end verification
+are not present. Internal test APK builds remain permitted.
+
+Replacing the character correctly requires a textured, connected humanoid
+mesh with actual skinning weights and face morph targets, reviewed against
+Nia's existing visual reference. An image or a structurally valid 25-bone
+mannequin cannot substitute for that requirement.

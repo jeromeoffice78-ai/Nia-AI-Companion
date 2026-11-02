@@ -1,4 +1,4 @@
-name: Nia Android Release Gate
+name: Nia Internal Android Preview Verification
 on:
   workflow_dispatch:
   push:
@@ -30,9 +30,9 @@ jobs:
         run: CI=1 npx expo install --check
       - name: Type check
         run: npx tsc --noEmit
-      - name: Require completed production avatar rig
+      - name: Validate internal test GLB structure
         run: |
-          test -s assets/nia-appearance-facial-rig-v2.glb || { echo '::error::Approved animated avatar missing; refusing incomplete APK'; exit 1; }
+          test -s assets/nia-appearance-facial-rig-v2.glb || { echo '::error::Test animated avatar missing; refusing broken test APK'; exit 1; }
           python3 scripts/verify_nia_rig.py assets/nia-appearance-facial-rig-v2.glb
           cp assets/nia-appearance-facial-rig-v2.glb assets/nia-character-animated.glb
       - name: Generate Android project
