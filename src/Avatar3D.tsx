@@ -19,6 +19,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
  const [modelUri,setModelUri]=useState<string|null>(null);
  const [loadedName,setLoadedName]=useState('Nia test rig — appearance not approved');
  const [diagnostics,setDiagnostics]=useState('Waiting for model');
+ const [staticPreview,setStaticPreview]=useState(false);
  const controller=useRef<Controller|null>(null);
  const disposed=useRef(false);
  const latestCues=useRef(visemes);
@@ -60,7 +61,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    if(!/\.glb$/i.test(file.name))throw new Error('Select a .glb 3D rig file');
    loadGeneration.current++;
    controller.current?.dispose();controller.current=null;
-   setLoadedName(file.name);setModelUri(file.uri);setDiagnostics('Loading selected GLB…');setError('');
+   setLoadedName(file.name);setModelUri(file.uri);setStaticPreview(false);setDiagnostics('Loading selected GLB…');setError('');
   }catch(e){setError(String(e));}
  }
  async function onContextCreate(gl:any){
@@ -70,31 +71,45 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    if(disposed.current||generation!==loadGeneration.current){mounted.dispose();return;}
    controller.current?.dispose();controller.current=mounted;mounted.setActive(AppState.currentState==='active');
    const d=mounted.diagnostics;
-   if(!d.rigged||d.boneCount<1||d.skinnedMeshes<1){mounted.dispose();controller.current=null;setError('The installed model is not a valid rigged character. Release blocked until the approved model is bundled.');return;}
-   setDiagnostics((d.rigged?'Rigged':'Invalid')+' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
-   mounted.play(latestMotion.current);
-   mounted.setSpeaking(latestSpeaking.current);
+   const requiredClips=['Idle','Walk','Dance','Wave'];
+   const requiredFace=['viseme_AA','viseme_EE','viseme_OH','viseme_FV','viseme_MBP','viseme_L','blinkLeft','blinkRight'];
+   const animated=d.rigged&&d.boneCount>=20&&d.skinnedMeshes>0&&
+     requiredClips.every(name=>d.animations.includes(name))&&
+     requiredFace.every(name=>d.morphTargets.includes(name));
+   if(!animated&&!modelUri){
+    mounted.dispose();controller.current=null;
+    setError('Bundled model is not a valid animated Nia rig. Production release remains blocked.');
+    return;
+   }
+   setStaticPreview(!animated);
+   setDiagnostics((animated?'Rigged internal animation test':'Static appearance preview — animation unavailable')+
+     ' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+
+     ' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
+   if(animated){
+     mounted.play(latestMotion.current);
+     mounted.setSpeaking(latestSpeaking.current);
+   }
    if(speaking&&!externalSpeaking)mounted.setVisemes(DEMO_MOUTH_CUES);
    else if(latestCues.current.length)mounted.setVisemes(latestCues.current);
   }catch(e){if(!disposed.current&&generation===loadGeneration.current){const details=e instanceof Error?(e.stack||e.message):String(e);setError(details);setDiagnostics('Avatar initialization error');}}
  }
- function select(next:Motion){setAutonomous(false);if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}latestMotion.current=next;setError('');setMotion(next);}
+ function select(next:Motion){if(staticPreview){setError('This imported model is appearance-only. Use a skinned animated rig to test movement.');return;}setAutonomous(false);if(controller.current&&!controller.current.play(next)){setError('Animation '+next+' is not available in this model');return;}latestMotion.current=next;setError('');setMotion(next);}
  function toggleSpeaking(){setSpeaking(v=>{controller.current?.setSpeaking(!v);return !v;});}
  return <View style={s.wrap}>
   <GLView key={modelUri||'bundled'} style={[s.canvas,{height:avatarHeight}]} onContextCreate={onContextCreate}/>
-  <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import Nia appearance rig (.glb)</Text></Pressable>
-  {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setLoadedName('Nia test rig — appearance not approved');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
+  <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import 3D GLB — animated rig or static appearance</Text></Pressable>
+  {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setStaticPreview(false);setLoadedName('Nia test rig — appearance not approved');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
   <Text style={s.caption}>Model: {loadedName}</Text>
-  <Pressable onPress={()=>setAutonomous(v=>!v)} style={s.btn}><Text style={s.txt}>Autonomous movement: {autonomous?'On':'Off'}</Text></Pressable>
+  <Pressable disabled={staticPreview} onPress={()=>setAutonomous(v=>!v)} style={[s.btn,staticPreview&&s.disabled]}><Text style={s.txt}>Autonomous movement: {staticPreview?'Unavailable — static model':autonomous?'On':'Off'}</Text></Pressable>
   <Text selectable style={s.caption}>Diagnostics: {diagnostics}</Text>
   {error?<Text style={s.error}>Model loading failed: {error}</Text>:null}
   <View style={s.row}>{(['Idle','Walk','Dance','Wave'] as Motion[]).map(v=>
-   <Pressable key={v} onPress={()=>select(v)} style={[s.btn,motion===v&&s.selected]}>
+   <Pressable key={v} disabled={staticPreview} onPress={()=>select(v)} style={[s.btn,motion===v&&!staticPreview&&s.selected,staticPreview&&s.disabled]}>
     <Text style={s.txt}>{v}</Text>
    </Pressable>)}</View>
-  <Pressable onPress={toggleSpeaking} style={[s.btn,s.speech]}><Text style={s.txt}>{speaking?'Stop silent mouth demo':'Test facial animation (silent)'}</Text></Pressable>
-  <Text style={s.caption}>Current test rig is segmented and does not match Nia's approved likeness. Full-body motion is under verification. Device speech is not phoneme-aligned; production release remains blocked.</Text>
+  <Pressable disabled={staticPreview} onPress={toggleSpeaking} style={[s.btn,s.speech,staticPreview&&s.disabled]}><Text style={s.txt}>{speaking?'Stop silent mouth demo':'Test facial animation (silent)'}</Text></Pressable>
+  <Text style={s.caption}>{staticPreview?'This imported model is a static 3D appearance preview. Body animation and lip-sync are disabled.':'Current animated test rig is not an approved realistic likeness.'} Production release remains blocked until the realistic rig, timed speech and physical device acceptance are verified.</Text>
  </View>;
 }
-const s=StyleSheet.create({wrap:{marginVertical:10},canvas:{height:270,borderRadius:12},row:{flexDirection:'row',justifyContent:'center',gap:10,marginTop:8},btn:{padding:10,backgroundColor:'#503953',borderRadius:8},selected:{backgroundColor:'#97568d'},txt:{color:'#fff'},caption:{color:'#d8b7d3',fontSize:12,marginTop:7,textAlign:'center'},error:{color:'#ffb6b6',marginTop:8},speech:{alignSelf:'center',marginTop:8}});
+const s=StyleSheet.create({wrap:{marginVertical:10},canvas:{height:270,borderRadius:12},row:{flexDirection:'row',justifyContent:'center',gap:10,marginTop:8},btn:{padding:10,backgroundColor:'#503953',borderRadius:8},selected:{backgroundColor:'#97568d'},txt:{color:'#fff'},caption:{color:'#d8b7d3',fontSize:12,marginTop:7,textAlign:'center'},error:{color:'#ffb6b6',marginTop:8},speech:{alignSelf:'center',marginTop:8},disabled:{opacity:0.35}});
 
