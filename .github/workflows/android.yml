@@ -65,3 +65,36 @@ jobs:
             nia-typescript.log
           if-no-files-found: ignore
 
+  emulator-smoke:
+    name: Install, launch and verify 3D avatar on Android emulator
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nia-standalone-test-apk
+          path: nia-build
+      - name: Enable KVM for hardware-accelerated Android emulator
+        run: |
+          sudo chown "$USER" /dev/kvm
+      - name: Install APK, verify Android scene and background/resume
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash scripts/android-emulator-smoke.sh
+      - name: Upload emulator diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nia-emulator-smoke-diagnostics
+          path: artifacts/android-smoke/
+          if-no-files-found: ignore
