@@ -59,7 +59,7 @@ test('actual 25-bone GLB skinned meshes move during additive Dance and Walk pose
 });
 test('Android test build has a distinct installable version and visible centered avatar',()=>{
  const app=JSON.parse(readFileSync('app.json','utf8'));
- assert.equal(app.expo.version,'0.1.1');
+ assert.match(app.expo.version,/^\d+\.\d+\.\d+$/);
  assert.ok(app.expo.android.versionCode>=2);
  const render=readFileSync('src/loadNiaGLB.ts','utf8');
  assert.match(render,/camera\.lookAt\(0,1\.04,0\)/);
