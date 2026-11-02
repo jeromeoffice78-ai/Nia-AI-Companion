@@ -30,11 +30,10 @@ jobs:
         run: CI=1 npx expo install --check
       - name: Type check
         run: npx tsc --noEmit
-      - name: Validate internal test GLB structure
+      - name: Validate active Nia rig without silently replacing it
         run: |
-          test -s assets/nia-appearance-facial-rig-v2.glb || { echo '::error::Test animated avatar missing; refusing broken test APK'; exit 1; }
-          python3 scripts/verify_nia_rig.py assets/nia-appearance-facial-rig-v2.glb
-          cp assets/nia-appearance-facial-rig-v2.glb assets/nia-character-animated.glb
+          test -s assets/nia-character-animated.glb || { echo '::error::Animated Nia test asset missing'; exit 1; }
+          python3 scripts/verify_nia_rig.py assets/nia-character-animated.glb
       - name: Generate Android project
         run: npx expo prebuild --platform android --non-interactive --clean
       - name: Build standalone test APK

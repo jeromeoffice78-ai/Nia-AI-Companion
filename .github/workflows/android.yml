@@ -34,11 +34,10 @@ jobs:
         run: |
           set -o pipefail
           npx tsc --noEmit 2>&1 | tee nia-typescript.log
-      - name: Require approved Nia rig and replace prototype
+      - name: Validate active Nia rig without silently replacing it
         run: |
-          test -s assets/nia-appearance-facial-rig-v2.glb || { echo "::error::Approved skeletal rig is missing from assets/"; exit 1; }
-          python3 scripts/verify_nia_rig.py assets/nia-appearance-facial-rig-v2.glb
-          cp assets/nia-appearance-facial-rig-v2.glb assets/nia-character-animated.glb
+          test -s assets/nia-character-animated.glb || { echo "::error::Animated Nia test asset missing"; exit 1; }
+          python3 scripts/verify_nia_rig.py assets/nia-character-animated.glb
       - name: Verify active bundled GLB
         run: python3 scripts/verify_nia_rig.py assets/nia-character-animated.glb
       - name: Generate Android project
