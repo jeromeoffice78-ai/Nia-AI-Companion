@@ -52,6 +52,21 @@ PY
       sleep 2
       continue
     fi
+    # The Pixel Launcher may show an Android OS "isn't responding" dialog
+    # on resource-constrained headless emulators. This obscures Nia's UI even
+    # when Nia is alive and rendering underneath it. Choose Wait, not Close.
+    if grep -Eq 'Pixel Launcher.*responding|Pixel Launcher.*not responding' "$ui"; then
+      echo "Android system launcher ANR dialog obscured Nia; selecting Wait"
+      coords=$(python3 scripts/android-dialog-coordinates.py "$ui" || true)
+      if [[ -n "$coords" ]]; then
+        adb shell input tap $coords
+        sleep 3
+        continue
+      fi
+      capture "$phase-system-anr"
+      echo "::error::Emulator infrastructure problem: system ANR dialog could not be dismissed"
+      return 1
+    fi
     if grep -q 'Model loading failed:' "$ui"; then
       capture "$phase-glb-error"
       echo "::error::Nia showed a GLB load failure during $phase"
