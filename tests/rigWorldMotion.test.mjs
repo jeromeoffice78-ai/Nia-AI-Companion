@@ -20,9 +20,17 @@ test('actual 25-bone GLB skinned meshes move during additive Dance and Walk pose
   rest.set(name,{rotation:node.rotation.clone(),position:node.position.clone()});
  }
  const meshNames=['Chest shirt','Left forearm','Right forearm','Left shin','Right shin','Left sneaker','Right sneaker'];
+ const normalized=name=>name.toLowerCase().replace(/[^a-z0-9]/g,'');
+ const skinned=[];
+ root.traverse(node=>{if(node instanceof SkinnedMesh)skinned.push(node);});
  const meshes=meshNames.map(name=>{
-  const mesh=root.getObjectByName(name);
-  assert.ok(mesh instanceof SkinnedMesh,'Missing skinned body mesh '+name);
+  const key=normalized(name);
+  // GLTFLoader sanitizes node names for animation bindings (e.g. spaces to
+  // underscores). Search actual SkinnedMesh nodes using normalized names.
+  const mesh=skinned.find(node=>normalized(node.name)===key)
+    ||skinned.find(node=>normalized(node.name).startsWith(key));
+  assert.ok(mesh instanceof SkinnedMesh,'Missing skinned body mesh '+name+
+    '; available: '+skinned.slice(0,15).map(m=>m.name).join(', '));
   return mesh;
  });
  function sample(mode,t){
