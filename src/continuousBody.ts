@@ -75,9 +75,14 @@ function makeGeometry(profile:ReadonlyArray<P>,keys:ReadonlyArray<Key>,jointInde
  return geometry;
 }
 export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
- const old=model.getObjectByName('Hips pelvis');
- if(!(old instanceof THREE.SkinnedMesh)||!model.getObjectByName('left shoulder seam')||
-    model.getObjectByName('Nia continuous fitted torso'))return {applied:false,created:0,hidden:0};
+ // GLTFLoader sanitizes spaces in node names, so match using a stable key.
+ const normalized=(name:string)=>name.toLowerCase().replace(/[^a-z0-9]/g,'');
+ const lookup=new Map<string,THREE.Object3D>();
+ model.traverse(node=>{lookup.set(normalized(node.name),node);});
+ const get=(name:string)=>lookup.get(normalized(name));
+ const old=get('Hips pelvis');
+ if(!(old instanceof THREE.SkinnedMesh)||!get('left shoulder seam')||
+    get('Nia continuous fitted torso'))return {applied:false,created:0,hidden:0};
  const skin=old.skeleton;
  const joints=new Map<string,number>(skin.bones.map((bone,i)=>[bone.name,i]));
  const required=['Hips','Spine','Chest','UpperChest','Neck','Head',
@@ -86,7 +91,7 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
  if(required.some(name=>!joints.has(name)))return {applied:false,created:0,hidden:0};
  const materials:Record<string,THREE.Material>={};
  for(const [key,nodeName] of Object.entries({skin:'Left upper arm',shirt:'Chest shirt',shorts:'Hips pelvis'})){
-  const n=model.getObjectByName(nodeName);
+  const n=get(nodeName);
   if(!(n instanceof THREE.Mesh))return {applied:false,created:0,hidden:0};
   materials[key]=(Array.isArray(n.material)?n.material[0]:n.material).clone();
  }
@@ -132,11 +137,11 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
  }
  let hidden=0;
  for(const name of oldBody){
-  const obj=model.getObjectByName(name);
+  const obj=get(name);
   if(obj){obj.visible=false;hidden++;}
  }
  model.traverse(obj=>{
-  if(obj.name.endsWith(' seam')||obj.name==='neck to upper chest seam'){
+  if(normalized(obj.name).endsWith('seam')){
    if(obj.visible){obj.visible=false;hidden++;}
   }
  });
