@@ -119,7 +119,7 @@ export default function Home(){
     let closed=false;
     const subscription=player.addListener('playbackStatusUpdate',status=>{
      if(closed||version!==speechVersion.current)return;
-     if(status.error||status.didJustFinish){done();return;}
+     if(status.didJustFinish){done();return;}
      if(status.playing&&status.isLoaded&&Number.isFinite(status.currentTime))
       setAudioPositionMs(Math.max(0,Math.round(status.currentTime*1000)));
     });
