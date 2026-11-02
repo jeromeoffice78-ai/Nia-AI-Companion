@@ -10,3 +10,6 @@
 6. **Production delivery** — replace internal debug signing, verify Android install/update, security, secrets, background behavior, and release artifacts.
 
 A plausible production asset pipeline is image-to-3D modeling, review of geometry, auto-rigging, facial blendshape creation, export to self-contained GLB, integration and on-device inspection. Some 3D services require an account and paid compute. No paid generation has been started.
+
+
+Visual production specification: [NIA_VISUAL_REFERENCE_SPEC.md](NIA_VISUAL_REFERENCE_SPEC.md). The aligned speech gateway has been implemented in source, but is not deployed or configured. See [ALIGNED_SPEECH_GATEWAY.md](ALIGNED_SPEECH_GATEWAY.md).
