@@ -74,7 +74,10 @@ async function chat(data){
 const server=http.createServer(async(req,res)=>{
  const path=new URL(req.url||'/', 'http://localhost').pathname;
  if(path==='/health'&&req.method==='GET'){
-  return json(res,ACCESS?200:503,{status:ACCESS?'ok':'not_configured',service:'nia-api',
+  // Do not report "ok" when Groq chat is not configured; the Android app
+  // uses /health to decide whether the gateway is usable.
+  const chatReady=Boolean(ACCESS&&GROQ_KEY);
+  return json(res,chatReady?200:503,{status:chatReady?'ok':'not_configured',service:'nia-api',
     voice_ready:Boolean(AZURE_KEY&&AZURE_REGION),chat_ready:Boolean(GROQ_KEY)});
  }
  if(!allowed(req))return json(res,401,{error:'Unauthorized'});
