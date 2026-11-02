@@ -13,7 +13,7 @@ python3 scripts/verify_nia_rig.py assets/nia-character-animated.glb
 CI=1 npx expo export --platform android
 ```
 
-The Android workflows run checks before generating a standalone test APK with embedded JavaScript and avatar assets. A successful bundle or structural rig check is not proof of a device-tested app.
+The Android workflows run checks before generating a standalone test APK with embedded JavaScript and avatar assets. A successful bundle or structural rig check is not proof of a device-tested app. The currently bundled GLB is explicitly a **segmented prototype**, not the approved photorealistic Nia likeness. Full-body procedural motion is in development and must be validated on Android hardware.
 
 ## Connection
 

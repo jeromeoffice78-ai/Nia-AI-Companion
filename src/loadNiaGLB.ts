@@ -9,7 +9,7 @@ import {computeBodyPose,REQUIRED_BODY_BONES} from './rigMotion';
 /**
  * Load a bundled GLB into the Nia OpenGL scene.
  * Uses the bundled animated GLB asset from src/niaModel.ts.
- * Android CI replaces the prototype with the approved skeletal GLB before packaging.
+ * The currently bundled segmented rig is for internal tests only, not likeness-approved.
  */
 export async function mountNiaGLB(gl:any, assetModule:number|string) {
  let stage='renderer';
@@ -21,7 +21,8 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
  const light=new THREE.DirectionalLight(0xffffff,2);
  light.position.set(3,5,4);scene.add(light);
  const camera=new THREE.PerspectiveCamera(45,gl.drawingBufferWidth/gl.drawingBufferHeight,0.1,100);
- camera.position.set(0,1.25,4.5);
+ camera.position.set(0,1.04,3.6);
+ camera.lookAt(0,1.04,0);
  let loaded:any;
  try{
   stage='resolve asset';
