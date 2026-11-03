@@ -67,7 +67,7 @@ export function applyNiaReferenceStyling(model:THREE.Object3D):AppearanceResult{
  function ellipsoid(name:string,at:[number,number,number],size:[number,number,number],material:THREE.Material){
   const mesh=new THREE.Mesh(new THREE.SphereGeometry(1,28,18),material);
   mesh.position.set(...at);mesh.scale.set(...size);
-  return add(name,head,mesh);
+  return add(name,head!,mesh);
  }
  // Bone-relative coordinates: Head's bind origin is world y≈1.73.
  // More natural brunette high bun with face-framing loose strands.
@@ -81,16 +81,16 @@ export function applyNiaReferenceStyling(model:THREE.Object3D):AppearanceResult{
    new THREE.Vector3(side*.119,.005,.122),
    new THREE.Vector3(side*.107,-.038,.116)
   ];
-  add(side<0?'left face-framing lock':'right face-framing lock',head,tube(points,.008,strandMaterial));
+  add(side<0?'left face-framing lock':'right face-framing lock',head!,tube(points,.008,strandMaterial));
   const brow=[
    new THREE.Vector3(side*.021,.118,.142),
    new THREE.Vector3(side*.042,.136,.151),
    new THREE.Vector3(side*.069,.130,.145),
    new THREE.Vector3(side*.087,.116,.133)
   ];
-  add(side<0?'left shaped eyebrow':'right shaped eyebrow',head,tube(brow,.0034,eyebrow));
+  add(side<0?'left shaped eyebrow':'right shaped eyebrow',head!,tube(brow,.0034,eyebrow));
  }
- add('side-swept fringe',head,tube([
+ add('side-swept fringe',head!,tube([
   new THREE.Vector3(-.115,.206,.078),
   new THREE.Vector3(-.064,.212,.131),
   new THREE.Vector3(.006,.176,.152),
@@ -99,7 +99,7 @@ export function applyNiaReferenceStyling(model:THREE.Object3D):AppearanceResult{
  // Fine high-bun hair texture without the original spherical curl clusters.
  for(let i=0;i<5;i++){
   const theta=(i/5)*Math.PI*1.65;
-  add('bun strand '+i,head,tube([
+  add('bun strand '+i,head!,tube([
     new THREE.Vector3(.027+.079*Math.cos(theta),.331,-.078+.059*Math.sin(theta)),
     new THREE.Vector3(.027+.04*Math.cos(theta+.6),.39,-.083+.040*Math.sin(theta+.6)),
     new THREE.Vector3(.027+.065*Math.cos(theta+1),.355,-.070+.02*Math.sin(theta+1))
@@ -107,7 +107,7 @@ export function applyNiaReferenceStyling(model:THREE.Object3D):AppearanceResult{
  }
  // Reference-inspired necklace. Attach to upper chest so animation follows
  // the skeleton rather than leaving a floating accessory in world coordinates.
- add('necklace chain',chest,tube([
+ add('necklace chain',chest!,tube([
   new THREE.Vector3(-.076,.143,.071),
   new THREE.Vector3(-.067,.097,.103),
   new THREE.Vector3(-.027,.067,.145),
@@ -116,7 +116,7 @@ export function applyNiaReferenceStyling(model:THREE.Object3D):AppearanceResult{
   new THREE.Vector3(.067,.097,.103),
   new THREE.Vector3(.076,.143,.071)
  ],.0027,gold));
- const pendant=add('heart pendant',chest,tube([
+ const pendant=add('heart pendant',chest!,tube([
   new THREE.Vector3(0,.061,.157),
   new THREE.Vector3(-.014,.072,.157),
   new THREE.Vector3(-.022,.060,.16),
