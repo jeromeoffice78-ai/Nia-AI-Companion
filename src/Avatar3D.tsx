@@ -8,7 +8,7 @@ import {VisemeCue} from './visemes';
 import {DEMO_MOUTH_CUES,DEMO_CYCLE_MS} from './mouthDemo';
 import {chooseAutonomousMotion,type Motion} from './avatarMotion';
 const EMPTY_CUES:VisemeCue[]=[];
-type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;bodyRefinement:boolean;continuousPieces:number;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setPlaybackPosition:(value:number|null)=>void;setActive:(value:boolean)=>void;dispose:()=>void};
+type Controller={diagnostics:{rigged:boolean;skinnedMeshes:number;boneCount:number;bodyRefinement:boolean;continuousPieces:number;appearancePreview:boolean;morphTargets:string[];animations:string[]};play:(name:Motion)=>boolean;setSpeaking:(value:boolean)=>void;setVisemes:(cues:VisemeCue[])=>void;setPlaybackPosition:(value:number|null)=>void;setActive:(value:boolean)=>void;dispose:()=>void};
 export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_CUES,playbackMs=null}:{speaking?:boolean;visemes?:VisemeCue[];playbackMs?:number|null}){
  const {height}=useWindowDimensions();
  const avatarHeight=Math.max(240,Math.round(height*0.5));
@@ -88,6 +88,7 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
    setDiagnostics((animated?'Rigged internal animation test':'Static appearance preview — animation unavailable')+
      ' | bones: '+d.boneCount+' | skinned meshes: '+d.skinnedMeshes+
      (d.bodyRefinement?' | continuous body pieces: '+d.continuousPieces:'')+
+     (d.appearancePreview?' | brunette/mauve appearance preview':'')+
      ' | facial targets: '+d.morphTargets.join(', ')+' | animations: '+d.animations.join(', '));
    if(animated){
      mounted.setPlaybackPosition(latestPlayback.current);

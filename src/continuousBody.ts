@@ -12,11 +12,15 @@ export type Refinement={applied:boolean;created:number;hidden:number};
 const oldBody=['Hips pelvis','Waist shirt','Chest shirt','Neck skin',
  'Left upper arm','Right upper arm','Left forearm','Right forearm',
  'Left shorts leg','Right shorts leg','Left thigh','Right thigh',
- 'Left shin','Right shin'];
-const torso:P[]=[[0,1.07,0,.165,.110],[0,1.15,0,.148,.112],[0,1.23,.008,.149,.119],
+ 'Left shin','Right shin','Left fitted shirt sleeve','Right fitted shirt sleeve'];
+const torso:P[]=[[0,1.01,0,.169,.120],[0,1.15,0,.148,.112],[0,1.23,.008,.149,.119],
  [0,1.33,.012,.186,.142],[0,1.42,.016,.213,.145],[0,1.51,.002,.192,.124],[0,1.57,0,.108,.092]];
-const hips:P[]=[[0,.86,0,.170,.135],[0,.94,0,.206,.145],[0,1.01,0,.207,.145],
- [0,1.10,0,.177,.125],[0,1.15,0,.158,.117]];
+// Cropped top intentionally leaves the midriff exposed. Light, narrow straps
+// replace the prototype T-shirt sleeves while retaining UpperChest skinning.
+const camisole:P[]=[[0,1.29,.004,.171,.132],[0,1.32,.008,.184,.144],
+ [0,1.39,.015,.211,.153],[0,1.45,.014,.206,.146],[0,1.485,.008,.177,.128]];
+const hips:P[]=[[0,.86,0,.170,.135],[0,.92,0,.203,.143],[0,.985,0,.203,.144],
+ [0,1.035,0,.165,.122],[0,1.065,0,.155,.118]];
 const neck:P[]=[[0,1.56,0,.065,.065],[0,1.62,0,.061,.062],[0,1.68,0,.062,.064],[0,1.715,0,.073,.072]];
 const clamp=(x:number)=>Math.min(1,Math.max(0,x));
 const smooth=(x:number)=>{const t=clamp(x);return t*t*(3-2*t);};
@@ -103,9 +107,12 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
   mesh.bindMode=old.bindMode;mesh.bindMatrixInverse.copy(old.bindMatrixInverse);
   generated.push(mesh);
  };
- add('fitted torso',torso,'shirt',[
+ add('fitted torso',torso,'skin',[
   K(0,[['Hips',.65],['Spine',.35]]),K(.26,[['Spine',.85],['Chest',.15]]),
   K(.62,[['Chest',.9],['UpperChest',.1]]),K(1,[['UpperChest',1]])]);
+ add('mauve cropped camisole',camisole,'shirt',[
+  K(0,[['Spine',.84],['Chest',.16]]),K(.35,[['Chest',.88],['UpperChest',.12]]),
+  K(1,[['UpperChest',1]])]);
  add('hips and shorts',hips,'shorts',[
   K(0,[['Hips',1]]),K(.45,[['Hips',1]]),K(1,[['Hips',.75],['Spine',.25]])]);
  add('neck',neck,'skin',[
@@ -114,8 +121,8 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
   const arm=scaled([[.238,1.52,0,.075,.075],[.270,1.465,0,.079,.074],[.315,1.365,0,.081,.073],
    [.356,1.30,0,.065,.063],[.398,1.245,0,.06,.059],[.419,1.17,0,.058,.057],
    [.456,1.095,0,.051,.052],[.478,1.026,0,.044,.044]],sign);
-  const sleeve=scaled([[.236,1.523,0,.084,.081],[.28,1.45,0,.086,.080],
-   [.313,1.389,0,.085,.074],[.329,1.354,0,.081,.073]],sign);
+  const strap=scaled([[.127,1.475,.138,.013,.009],[.135,1.518,.114,.012,.009],
+   [.143,1.56,.075,.012,.009],[.159,1.57,.044,.011,.010]],sign);
   const leg=scaled([[.115,.821,0,.1,.098],[.115,.748,0,.104,.101],[.116,.66,0,.10,.099],
    [.119,.584,0,.082,.086],[.12,.553,0,.071,.074],[.12,.483,0,.078,.075],
    [.12,.374,0,.076,.074],[.119,.25,0,.069,.068],[.12,.151,0,.049,.051]],sign);
@@ -126,8 +133,8 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
    K(.56,[[side+'UpperArm',.36],[side+'LowerArm',.64]]),
    K(.82,[[side+'LowerArm',.94],[side+'Hand',.06]]),
    K(1,[[side+'LowerArm',.38],[side+'Hand',.62]])]);
-  add(side+' shirt sleeve',sleeve,'shirt',[
-   K(0,[['UpperChest',.6],[side+'UpperArm',.4]]),K(1,[[side+'UpperArm',1]])]);
+  add(side+' camisole strap',strap,'shirt',[
+   K(0,[['UpperChest',1]]),K(1,[['UpperChest',.7],[side+'Shoulder',.3]])]);
   add(side+' skin leg',leg,'skin',[
    K(0,[[side+'UpperLeg',1]]),K(.33,[[side+'UpperLeg',.94],[side+'LowerLeg',.06]]),
    K(.55,[[side+'UpperLeg',.32],[side+'LowerLeg',.68]]),
