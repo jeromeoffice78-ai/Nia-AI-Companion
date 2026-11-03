@@ -3,7 +3,7 @@
     "name": "Nia AI Companion",
     "slug": "nia-ai-companion",
     "scheme": "nia",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "android": {
@@ -13,7 +13,7 @@
         "POST_NOTIFICATIONS",
         "CAMERA"
       ],
-      "versionCode": 8
+      "versionCode": 9
     },
     "plugins": [
       "expo-router",

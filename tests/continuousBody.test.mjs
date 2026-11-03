@@ -14,7 +14,7 @@ test('Nia test rig gets continuous surfaces without losing the real skeleton',as
  const clips=gltf.animations.map(x=>x.name);
  const r=applyContinuousNiaBody(model);
  assert.equal(r.applied,true);
- assert.equal(r.created,12);
+ assert.equal(r.created,11);
  assert.ok(r.hidden>=20);
  assert.equal(before.visible,false);
  assert.deepEqual(clips,['Idle','Walk','Dance','Wave']);

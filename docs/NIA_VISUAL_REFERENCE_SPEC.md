@@ -1,18 +1,23 @@
-# Nia appearance target — reference-driven production modeling
+# Nia visual likeness — SOURCE REJECTED / APPROVAL REQUIRED
 
-Source: the existing **Nia AI Companion Character Portrait** in the owner's private file library. Do not publish or commit the reference pixels or assume it is a distributable real person's photo.
+**Status: NOT APPROVED. Do not use the incorrect portrait to model Nia.**
 
-## Visible appearance to reproduce
-- **Character:** a clearly adult, human-proportioned slim woman. Avoid stylized mannequin segmentation, floating pieces, bulging ellipsoid knees, or rigid cut joints.
-- **Face:** warm natural facial anatomy, brown eyes, shaped brows, delicate nose and lips, realistic eyelids and mouth interior; facial appearance must be visually compared against the user's approved portrait from front and three-quarter views. Do not declare likeness without their review.
-- **Hair:** dark brunette, loosely gathered high bun/updo with face-framing strands, not the current blocky braided ponytail.
-- **Clothing:** matching dusty-pink/mauve fitted crop camisole with narrow straps and buttoned front, matching short lounge shorts with drawstring and trim; avoid the mannequin's white T-shirt and gray shorts.
-- **Accessories:** delicate heart-shaped pendant necklace. Keep geometry anchored to the chest rig.
-- **Body:** continuous high-quality mesh with believable shoulders, elbows, waist, hips, knees and ankles; mild fabric drape and wrinkle detail, natural skin shading and smooth surface normals.
-- **Materials:** physically-based skin and fabric textures, detailed eyes and hair, embedded in a portable GLB. Verify PBR textures and lighting from multiple angles.
-- **Rig:** preserve or correctly retarget 25+ humanoid joints and Idle/Walk/Dance/Wave; require bone weight painting across flex joints and the eight existing face blendshapes. Add jaw/teeth, tongue and phoneme controls as appropriate.
-- **Android:** benchmark frame rate and memory on the owner's Android phone, verify animation appearance and mouth sync against the actual synthesized audio, maintain correct orientation and scale.
-- **Approval:** separate source asset and owner-reviewed final GLB, linked by SHA-256. No approval flag may be invented.
+The owner explicitly rejected the image and reference package previously used to guide the v0.1.7 brunette-updo, mauve-camisole, pendant, and face modifications. Those changes were based on the wrong character and have been rolled back.
 
-## Production limitation
-The current 0.1.x test assets do not match this reference. Changing shirt and shorts colors alone will not create the approved likeness. A new sculpted/textured humanoid model, facial rig and actual on-device review are necessary.
+## Excluded source
+- `Nia AI Companion Character Portrait.png` was mistakenly treated as the approved likeness.
+- Derived crops from `Nia_Private_3D_Modeling_References.zip` are also invalid for Nia production.
+- Do not reuse these images as likeness references, use their colors/clothing as approval evidence, or generate replacement models from them.
+
+## Required authoritative source
+The user previously approved a Nia front/rear turnaround and later referenced Nia's original appearance. The exact image bytes and its latest approval state are **not verified in this repository**. Do not assume any other portrait or sprite is equivalent. Obtain the explicit owner-designated approved reference image before resuming likeness modeling.
+
+## Engineering requirements preserved
+- Continuous anatomically plausible mesh, no floating/separated limbs.
+- Well-weighted skeletal rig with Idle, Walk, Dance, and Wave.
+- Facial controls, blink and verifiable audio-aligned mouth animation.
+- Embedded textures and sensible Android performance.
+- Owner must visually approve the final likeness on a physical Android device.
+- Production remains blocked until an approved asset hash is documented and visual QA passes.
+
+This document replaces the incorrect appearance specification and must not be interpreted as approval.
