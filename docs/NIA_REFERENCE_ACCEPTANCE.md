@@ -1,17 +1,16 @@
-# Nia reference acceptance checklist
+# Nia likeness reference acceptance
 
-**No current likeness reference is approved for use in this GitHub repository.**
+**Approved 2D reference identified on November 5, 2026. Production 3D avatar not approved.**
 
-The mistakenly selected `Nia AI Companion Character Portrait.png` and all image crops in `Nia_Private_3D_Modeling_References.zip` were explicitly rejected by the owner. Neither can be treated as Nia's official character, even if they look similar to another design. Do not copy or recolor them into a new production model.
+Use `docs/NIA_VISUAL_REFERENCE_SPEC.md` as the canonical source of the owner-selected picture's SHA-256, visual traits, and rejected earlier design. The actual reference file remains private; it must be retrieved using its SHA-256 before generating or sculpting the realistic 3D character.
 
-Before modeling resumes:
+Do not upload the user's original or edited picture to the public GitHub repo. Do not treat metadata alone as source pixels.
 
-1. The owner supplies or identifies the **exact** image of the approved Nia. Do not infer approval from a similar character portrait, a sprite, a previous assistant-generated picture, a filename, or a design description.
-2. Store the original image **privately**, not in the public GitHub repository. Record its SHA-256, date, and explicit owner approval without claiming an unverified historical approval.
-3. Generate a face/body modeling target and preview only from that approved image. Verify face, hair, body shape, and outfit with the owner before investing in 3D retopology.
-4. Build textured, contiguous skinned geometry; rig and animate; validate facial morphs and synchronized mouth movement.
-5. Require owner approval of the final model and record its exact GLB SHA-256. Run the existing `scripts/verify_nia_production.py` and physical Android visual acceptance.
+Next milestones:
+1. Privately provide the approved reference to a capable 3D modeling pipeline.
+2. Construct realistic face, hair, body, outfit and empty-hand geometry; verify against the *exact* image.
+3. Rig the realistic GLB with skin weights, facial blendshapes and humanoid animations.
+4. Import into Nia Android; inspect on-device, with owner approval of the rendered 3D model.
+5. Complete timed voice-to-viseme testing and record a separate production-approved GLB SHA-256.
 
-Until step 1, development may proceed on rig functionality, import safety, and animation tests, but **not** on likeness-specific appearance.
-
-The current bundled character is an internal animation test rig and not the approved visual Nia. This policy does not remove or weaken the production release gate.
+The previous pink-outfit portrait and its crops remain rejected; tests forbid their styling from returning. **The approval of the 2D source image does not lift the production release block.**

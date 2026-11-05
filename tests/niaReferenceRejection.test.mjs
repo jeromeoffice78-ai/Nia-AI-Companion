@@ -7,8 +7,8 @@ test('rejected Nia portrait styling never enters the active Android renderer',()
  assert.doesNotMatch(renderer,/applyNiaReferenceStyling|niaAppearance/);
  assert.equal(existsSync('src/niaAppearance.ts'),false);
  const visual=readFileSync('docs/NIA_VISUAL_REFERENCE_SPEC.md','utf8');
- assert.match(visual,/SOURCE REJECTED \/ APPROVAL REQUIRED/);
- assert.match(visual,/Do not use the incorrect portrait to model Nia/);
+ assert.match(visual,/APPROVED FOR LIKENESS MODELING ONLY/);
+ assert.match(visual,/Do not reintroduce those assets or styling/);
 });
 test('Nia release still requires explicit approved asset and device validation',()=>{
  const gate=readFileSync('scripts/verify_nia_production.py','utf8');
@@ -24,4 +24,14 @@ test('reject wrong reference derived files from likeness modeling',()=>{
   'Nia AI Companion Character Portrait.png',
   'Nia_Private_3D_Modeling_References.zip'
  ])assert.ok(visual.includes(wrong),'Rejected source is not documented: '+wrong);
+});
+
+test('owner-approved purse-free 2D reference is the authoritative likeness source',()=>{
+ const spec=readFileSync('docs/NIA_VISUAL_REFERENCE_SPEC.md','utf8');
+ assert.match(spec,/1acb24ab08aff9d19f7ccf2d9ab068ab267a3094b1fc2fe53c8a68ca26e9f0d8/);
+ assert.match(spec,/Empty right hand/);
+ assert.match(spec,/dark curly \*\*high ponytail\*\*/);
+ assert.match(spec,/white short-sleeve athletic top/);
+ assert.match(spec,/gray fitted athletic shorts/);
+ assert.match(spec,/production 3D GLB NOT approved/);
 });
