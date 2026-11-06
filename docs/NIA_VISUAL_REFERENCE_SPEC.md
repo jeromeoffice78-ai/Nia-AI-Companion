@@ -2,12 +2,12 @@
 
 **Status: APPROVED FOR LIKENESS MODELING ONLY; production 3D GLB NOT approved.**
 
-On November 5, 2026, the owner explicitly confirmed the edited, purse-free and slimmer version of the outdoor full-body image as the approved Nia character picture. This is the authority for the next 3D likeness build, replacing the previously mistaken pink-camisole portrait.
+On November 5, 2026, the owner explicitly confirmed the **latest** edited, purse-free and slimmer outdoor full-body picture as the approved Nia character image ("Perfect"). The latest file supersedes the earlier purse-free edit. This is the authority for the next 3D likeness build, replacing the previously mistaken pink-camisole portrait.
 
-- Private image identifier: `smiling_athlete_on_a_leafy_sidewalk.png`
-- SHA-256 of the approved edited image: `1acb24ab08aff9d19f7ccf2d9ab068ab267a3094b1fc2fe53c8a68ca26e9f0d8`
+- Private image identifier: `sunny_sidewalk_athletic_portrait.png`
+- SHA-256 of the approved edited image: `e69aa53ae84f964f0e55202d711ad117d01f321f2eef3161382d1acb56532db5`
 - The source image is held in the conversation's private working files. **The image bytes have NOT been uploaded to this public repository.** A filename and hash alone cannot reconstruct the image; retrieve the user-approved source privately before sculpting.
-- The original photo with the green purse is NOT the approved final reference; the purse-free edited version is.
+- The original photo with the green purse and the earlier purse-free image version are **not the final modeling source**. Use only the latest verified image hash.
 
 ## Likeness target
 

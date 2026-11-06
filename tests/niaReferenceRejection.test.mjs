@@ -28,7 +28,7 @@ test('reject wrong reference derived files from likeness modeling',()=>{
 
 test('owner-approved purse-free 2D reference is the authoritative likeness source',()=>{
  const spec=readFileSync('docs/NIA_VISUAL_REFERENCE_SPEC.md','utf8');
- assert.match(spec,/1acb24ab08aff9d19f7ccf2d9ab068ab267a3094b1fc2fe53c8a68ca26e9f0d8/);
+ assert.match(spec,/e69aa53ae84f964f0e55202d711ad117d01f321f2eef3161382d1acb56532db5/);
  assert.match(spec,/Empty right hand/);
  assert.match(spec,/dark curly \*\*high ponytail\*\*/);
  assert.match(spec,/white short-sleeve athletic top/);
