@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -13,6 +15,7 @@ import com.facebook.react.bridge.ReactMethod;
 /** Starts a user-visible, independently owned overlay service, never a JS placeholder. */
 public class NiaOverlayModule extends ReactContextBaseJavaModule {
  private final ReactApplicationContext context;
+ private final Handler mainHandler=new Handler(Looper.getMainLooper());
  public NiaOverlayModule(ReactApplicationContext context){super(context);this.context=context;}
  @Override public String getName(){return "NiaOverlay";}
  @ReactMethod public void hasPermission(Promise promise){promise.resolve(Build.VERSION.SDK_INT<23||Settings.canDrawOverlays(context));}
@@ -40,8 +43,19 @@ public class NiaOverlayModule extends ReactContextBaseJavaModule {
   });
  }
  @ReactMethod public void hide(Promise promise){
-  try{context.stopService(new Intent(context,NiaOverlayService.class));promise.resolve(true);}
-  catch(Exception e){promise.reject("OVERLAY_STOP",e);}
+  mainHandler.post(()->{
+   try{NiaOverlayService.resetSpeechState();context.stopService(new Intent(context,NiaOverlayService.class));promise.resolve(true);}
+   catch(Exception e){promise.reject("OVERLAY_STOP",e);}
+  });
+ }
+ @ReactMethod public void setSpeechState(String viseme,double opening,boolean speaking,Promise promise){
+  if(!NiaOverlayService.validSpeechState(viseme,opening)){
+   promise.reject("INVALID_SPEECH_STATE","Use a supported viseme and a finite opening between 0 and 1");return;
+  }
+  mainHandler.post(()->{
+   try{promise.resolve(NiaOverlayService.setSpeechState(viseme,opening,speaking));}
+   catch(Exception e){promise.reject("OVERLAY_SPEECH",e);}
+  });
  }
  @ReactMethod public void getStatus(Promise promise){promise.resolve(NiaOverlayService.status);}
 }

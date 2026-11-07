@@ -1,10 +1,8 @@
 name: Recheck compiled Nia floating APK
+# Historical checksum-pinned v0.1.11 retest. New application versions use the
+# full Android build/emulator workflow; this guard intentionally rejects them.
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/verify-built-apk.yml'
-      - 'scripts/android-emulator-smoke.sh'
-      - 'tests/android-emulator.test.mjs'
+  workflow_dispatch:
 permissions:
   contents: read
   actions: read

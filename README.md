@@ -25,7 +25,7 @@ The `Build Android Standalone Test APK` workflow now installs the resulting APK 
 
 ## Remaining release blockers
 
-A native floating WebGL window is implemented as an internal candidate; native/emulator/device validation and its speech/viseme integration remain separate requirements. Full duplex calls, an unattended telephone agent, an offline language model, and measured phoneme-aligned speech playback are not verified. Camera, microphone, notification delivery, GL rendering, and installation need Android hardware testing. The generated release variant uses the Expo debug signing key for internal testing. Do not treat this as production signing or a completed production release.
+A native floating WebGL window is implemented as an internal candidate; its aligned speech/viseme bridge now follows the main app audio clock, while live audiovisual and physical-device validation remain required. Background speech continuation is not implemented. Full duplex calls, an unattended telephone agent, an offline language model, and measured phoneme-aligned speech playback are not verified. Camera, microphone, notification delivery, GL rendering, and installation need Android hardware testing. The generated release variant uses the Expo debug signing key for internal testing. Do not treat this as production signing or a completed production release.
 
 ## Production release control
 

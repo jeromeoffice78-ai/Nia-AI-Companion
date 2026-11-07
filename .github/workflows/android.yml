@@ -18,10 +18,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          # Pull requests restore caches, but only main publishes shared entries.
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
@@ -49,7 +55,7 @@ jobs:
         run: npx expo prebuild --platform android --non-interactive --clean
       - name: Build standalone test APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
       - name: Verify embedded application bundle
         run: unzip -l android/app/build/outputs/apk/release/app-release.apk | grep 'assets/index.android.bundle'
       - name: Upload APK

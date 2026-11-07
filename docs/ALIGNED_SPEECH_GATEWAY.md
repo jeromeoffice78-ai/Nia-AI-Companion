@@ -28,3 +28,6 @@ Enable the gateway connection in Android settings, then record a voice message.
 The transcript becomes a draft for review, appending to any existing text. It is never automatically sent to chat. Changing settings during recording does not redirect the upload; backgrounding cancels transcription and discards late results. `/health` reports `transcription_ready` separately from Azure synthesis readiness.
 
 This implementation requires gateway deployment and a real Android microphone/upload test before live voice input is verified. Automated provider tests use controlled responses and do not prove recognition accuracy or live credentials.
+
+## Floating mouth playback (0.1.12)
+The main AudioPlayer sends the viseme selected at its measured playback position to the existing ready overlay. Only whitelisted viseme/opening/speaking scalar data crosses the one-way native bridge; URLs, tokens, text and audio do not enter the WebView. Buffering, pause, stopped speech, backgrounding and unaligned Android TTS keep the mouth closed. This is not evidence of measured live audiovisual accuracy, and speech currently stops when the main app backgrounds.

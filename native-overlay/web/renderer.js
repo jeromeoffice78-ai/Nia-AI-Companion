@@ -1,10 +1,63 @@
 import * as THREE from './three.module.js';
 import {GLTFLoader} from './GLTFLoader.js';
 
+// Scalar states come from the native bridge using the audio player's measured
+// currentTime and validated aligned cues. This renderer never derives phonemes
+// from text or advances a speech timeline using a local clock.
+const SPEECH_VISEMES=new Set(['sil','PP','FF','TH','DD','kk','CH','SS','nn','RR','aa','E','ih','oh','ou']);
+const SHAPES={PP:'viseme_MBP',FF:'viseme_FV',aa:'viseme_AA',E:'viseme_EE',ih:'viseme_EE',oh:'viseme_OH',ou:'viseme_OH',nn:'viseme_L',DD:'viseme_L',RR:'viseme_OH'};
+const silentSpeech=()=>({viseme:'sil',opening:0,speaking:false});
+export function normalizeOverlaySpeechState(value){
+ if(!value||typeof value!=='object'||Array.isArray(value)||
+    !SPEECH_VISEMES.has(value.viseme)||typeof value.speaking!=='boolean'||
+    typeof value.opening!=='number'||!Number.isFinite(value.opening)||value.opening<0||value.opening>1)return null;
+ return !value.speaking||value.viseme==='sil'?silentSpeech():
+  {viseme:value.viseme,opening:value.opening,speaking:true};
+}
+export function createOverlaySpeechController(root){
+ const faces=[];
+ root.traverse(node=>{if(node.isMesh&&node.morphTargetDictionary&&node.morphTargetInfluences)faces.push(node);});
+ const jaw=root.getObjectByName('Jaw')||root.getObjectByName('jaw');
+ const jawRest=jaw?.rotation.x;
+ let state=silentSpeech();
+ function reset(){
+  state=silentSpeech();
+  for(const mesh of faces)for(const [name,index] of Object.entries(mesh.morphTargetDictionary))
+   if(name.startsWith('viseme_'))mesh.morphTargetInfluences[index]=0;
+  if(jaw)jaw.rotation.x=jawRest;
+ }
+ function setSpeechState(value){
+  const valid=normalizeOverlaySpeechState(value);
+  if(!valid||!valid.speaking){reset();return Boolean(valid);}
+  state=valid;return true;
+ }
+ function update(deltaSeconds){
+  const delta=Number.isFinite(deltaSeconds)?Math.max(0,Math.min(.1,deltaSeconds)):0;
+  const alpha=1-Math.exp(-18*delta);
+  const target=state.speaking?(SHAPES[state.viseme]||'viseme_AA'):null;
+  for(const mesh of faces)for(const [name,index] of Object.entries(mesh.morphTargetDictionary)){
+   if(!name.startsWith('viseme_'))continue; // Keep imported blinks and expressions.
+   const wanted=name===target?state.opening:0;
+   const current=Number.isFinite(mesh.morphTargetInfluences[index])?mesh.morphTargetInfluences[index]:0;
+   mesh.morphTargetInfluences[index]=current+(wanted-current)*alpha;
+  }
+  if(jaw){const wanted=jawRest+(state.speaking ? .08*state.opening : 0);jaw.rotation.x+=(wanted-jaw.rotation.x)*alpha;}
+ }
+ reset();return {setSpeechState,update,reset};
+}
+
 const canvas=document.querySelector('#scene');
 const label=document.querySelector('#status');
 let renderer,mixer,scene,camera,model,frame=0,disposed=false,paused=false,ready=false;
 let elapsed=0,last=0,action=null,lastMotionChange=0,autonomous=true,motionIndex=0;
+let speechController=null,pendingSpeechState=silentSpeech();
+window.niaOverlay={setSpeechState(value){
+ if(disposed)return false;
+ const valid=normalizeOverlaySpeechState(value);pendingSpeechState=valid||silentSpeech();
+ speechController?.setSpeechState(pendingSpeechState);
+ if(!pendingSpeechState.speaking&&renderer&&scene&&camera)renderer.render(scene,camera);
+ return Boolean(valid);
+}};
 function fail(error){
  const message=error instanceof Error?error.message:String(error);
  document.querySelector('#error').textContent='3D overlay could not start: '+message;
@@ -35,6 +88,7 @@ function tick(now){
   const motions=['Idle','Wave','Idle','Dance'];play(motions[++motionIndex%motions.length]);lastMotionChange=elapsed;
  }
  mixer.update(delta);
+ speechController?.update(delta);
  renderer.render(scene,camera);
  if(!ready){
   if(renderer.info.render.calls<1)throw Error('No geometry was drawn');
@@ -48,7 +102,7 @@ function tick(now){
 function resume(){last=0;cancelAnimationFrame(frame);if(!disposed&&!paused&&!document.hidden)frame=requestAnimationFrame(safeTick);}
 function safeTick(now){try{tick(now);}catch(error){fail(error);}}
 function dispose(){
- if(disposed)return;disposed=true;cancelAnimationFrame(frame);mixer?.stopAllAction();
+ if(disposed)return;disposed=true;cancelAnimationFrame(frame);speechController?.reset();pendingSpeechState=silentSpeech();mixer?.stopAllAction();
  scene?.traverse(node=>{
   if(!node.isMesh)return;node.geometry.dispose();
   for(const material of (Array.isArray(node.material)?node.material:[node.material])){
@@ -60,7 +114,7 @@ function dispose(){
 }
 window.addEventListener('pagehide',dispose);
 window.addEventListener('resize',resize);
-document.addEventListener('visibilitychange',resume);
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pendingSpeechState=silentSpeech();speechController?.reset();}resume();});
 canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();if(!disposed)fail(Error('WebGL context lost; close and reopen the overlay'));});
 document.querySelector('#pause').addEventListener('click',event=>{paused=!paused;event.target.textContent=paused?'Resume':'Pause';resume();});
 for(const button of document.querySelectorAll('[data-motion]'))button.addEventListener('click',()=>{try{autonomous=false;play(button.dataset.motion);}catch(error){fail(error);}});
@@ -80,6 +134,7 @@ async function main(){
  model=await new GLTFLoader().parseAsync(bytes,'');
  if(disposed)return;
  scene.add(model.scene);mixer=new THREE.AnimationMixer(model.scene);
+ speechController=createOverlaySpeechController(model.scene);speechController.setSpeechState(pendingSpeechState);
  const box=new THREE.Box3().setFromObject(model.scene),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
  if(!Number.isFinite(size.y)||size.y<=0)throw Error('Empty bundled character');
  camera=new THREE.PerspectiveCamera(40,1,.01,100);

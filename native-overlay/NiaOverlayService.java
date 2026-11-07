@@ -39,10 +39,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import org.json.JSONObject;
+import org.json.JSONException;
 
 /** Offline GLB/WebGL renderer in a real Android system overlay. No microphone or network. */
 public class NiaOverlayService extends Service {
  public static volatile String status="hidden";
+ private static NiaOverlayService activeService;
+ private static final Set<String> VISEMES=new HashSet<>(Arrays.asList("sil","PP","FF","TH","DD","kk","CH","SS","nn","RR","aa","E","ih","oh","ou"));
  private static final String CHANNEL="nia-floating-avatar",STOP="com.nia.companion.STOP_OVERLAY";
  private static final int NOTICE=7521;
  private static final Set<String> ASSETS=new HashSet<>(Arrays.asList("index.html","renderer.js","three.module.js","GLTFLoader.js","BufferGeometryUtils.js","nia-character.glb"));
@@ -60,6 +64,30 @@ public class NiaOverlayService extends Service {
   }
  };
  @Override public IBinder onBind(Intent intent){return null;}
+ @Override public void onCreate(){super.onCreate();activeService=this;}
+ public static boolean validSpeechState(String viseme,double opening){
+  return viseme!=null&&VISEMES.contains(viseme)&&!Double.isNaN(opening)&&!Double.isInfinite(opening)&&opening>=0&&opening<=1;
+ }
+ private static String speechStateScript(String viseme,double opening,boolean speaking)throws JSONException{
+  if(!validSpeechState(viseme,opening))throw new IllegalArgumentException("Invalid overlay speech state");
+  JSONObject payload=new JSONObject();
+  payload.put("viseme",speaking?viseme:"sil");
+  payload.put("opening",speaking&&!"sil".equals(viseme)?opening:0);
+  payload.put("speaking",speaking);
+  return "(function(){if(window.niaOverlay&&typeof window.niaOverlay.setSpeechState==='function'){window.niaOverlay.setSpeechState("+payload.toString()+");}})();";
+ }
+ /** One-way scalar animation updates; never start an overlay from speech. */
+ public static boolean setSpeechState(String viseme,double opening,boolean speaking)throws JSONException{
+  if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Overlay speech updates require the main thread");
+  if(!validSpeechState(viseme,opening))throw new IllegalArgumentException("Invalid overlay speech state");
+  NiaOverlayService service=activeService;
+  if(service==null||service.destroyed||service.web==null||!"ready".equals(status))return false;
+  service.web.evaluateJavascript(speechStateScript(viseme,opening,speaking),null);
+  return true;
+ }
+ public static void resetSpeechState(){
+  try{setSpeechState("sil",0,false);}catch(Exception ignored){}
+ }
  @Override public int onStartCommand(Intent intent,int flags,int startId){
   if(intent!=null&&STOP.equals(intent.getAction())){stopSelf();return START_NOT_STICKY;}
   try{
@@ -149,7 +177,9 @@ public class NiaOverlayService extends Service {
  }
  private WebResourceResponse denied(){return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));}
  @Override public void onDestroy(){
+  resetSpeechState();
   destroyed=true;mainHandler.removeCallbacks(loadTimeout);
+  if(activeService==this)activeService=null;
   if(web!=null){web.stopLoading();web.onPause();web.loadUrl("about:blank");}
   if(floating!=null&&manager!=null){try{manager.removeViewImmediate(floating);}catch(Exception ignored){}}
   if(web!=null){web.removeAllViews();web.destroy();web=null;}

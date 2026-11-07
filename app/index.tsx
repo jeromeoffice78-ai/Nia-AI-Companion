@@ -14,7 +14,8 @@ import {VisemeCue} from '../src/visemes';
 import {secureUrl,fetchWithTimeout} from '../src/network';
 import {loadConversation,saveConversation,deleteConversation} from '../src/secureHistory';
 import {loadMemoryNotes,saveMemoryNotes as persistMemoryNotes,deleteMemoryNotes} from '../src/secureNotes';
-import {showNiaOverlay,hideNiaOverlay,niaOverlayStatus} from '../src/niaOverlay';
+import {showNiaOverlay,hideNiaOverlay,niaOverlayStatus,sendNiaOverlaySpeech,clearNiaOverlaySpeech} from '../src/niaOverlay';
+import {overlaySpeechFrame} from '../src/overlaySpeech';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
@@ -61,16 +62,21 @@ export default function Home(){
  const [overlayStatus,setOverlayStatus]=useState('hidden');
  const [overlayRequested,setOverlayRequested]=useState(false);
  useEffect(()=>{
+  if(!overlayRequested||overlayStatus!=='ready')return;
+  try{void sendNiaOverlaySpeech(overlaySpeechFrame(visemeCues,audioPositionMs,avatarSpeaking)).catch(()=>{});}catch{void clearNiaOverlaySpeech().catch(()=>{});}
+ },[overlayRequested,overlayStatus,visemeCues,audioPositionMs,avatarSpeaking]);
+ useEffect(()=>{
   if(!overlayRequested)return;
   let active=true;
   const update=async()=>{if(AppState.currentState!=='active')return;try{const status=await niaOverlayStatus();if(active){setOverlayStatus(status);if(status==='hidden'||status.startsWith('error'))setOverlayRequested(false);}}catch(error){if(active){setOverlayStatus(String(error));setOverlayRequested(false);}}};
   const timer=setInterval(()=>{void update()},1000);
   return()=>{active=false;clearInterval(timer)};
  },[overlayRequested]);
- useEffect(()=>()=>{voiceGeneration.current++;voiceAbort.current?.abort();alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();},[]);
+ useEffect(()=>()=>{voiceGeneration.current++;voiceAbort.current?.abort();alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();void clearNiaOverlaySpeech().catch(()=>{});},[]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
    if(state!=='active'){
+    void clearNiaOverlaySpeech().catch(()=>{});
     voiceGeneration.current++;voiceAbort.current?.abort();
     speechVersion.current++;setCameraVisible(false);
     if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{}).finally(()=>{operation.current=false;recordingConnection.current=null;});}
@@ -135,13 +141,15 @@ export default function Home(){
     const subscription=player.addListener('playbackStatusUpdate',status=>{
      if(closed||version!==speechVersion.current)return;
      if(status.didJustFinish){done();return;}
-     if(status.playing&&status.isLoaded&&Number.isFinite(status.currentTime))
+     const playing=status.playing&&status.isLoaded&&!status.isBuffering;
+     setAvatarSpeaking(playing);
+     if(playing&&Number.isFinite(status.currentTime))
       setAudioPositionMs(Math.max(0,Math.round(status.currentTime*1000)));
     });
     alignedPlayer.current={stop:()=>{
      if(closed)return;closed=true;subscription.remove();player.pause();player.remove();
     }};
-    setAudioPositionMs(0);setVisemeCues(aligned.cues);setAvatarSpeaking(true);
+    setAudioPositionMs(0);setVisemeCues(aligned.cues);setAvatarSpeaking(false);
     player.play();return;
    }catch(error){
     if(version!==speechVersion.current)return;
