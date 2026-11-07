@@ -8,7 +8,12 @@ OUT=artifacts/android-smoke
 mkdir -p "$OUT"
 test -s "$APK"
 adb wait-for-device
-until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
+booted=false
+for i in $(seq 1 90); do
+  if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; then booted=true; break; fi
+  sleep 2
+done
+if [ "$booted" != true ]; then echo "::error::Android did not finish booting within 180 seconds"; exit 1; fi
 adb install -r "$APK" | tee "$OUT/install.txt"
 adb shell pm path "$APP" | grep -q package: || { echo "::error::Nia APK is not installed"; exit 1; }
 adb logcat -c
@@ -28,6 +33,9 @@ verify_scene() {
   # Slow software GL / cold Android initialization can take substantially
   # longer than the old 5-second pidof check. Poll for visible diagnostics.
   for i in $(seq 1 24); do
+    # A failed dump must never reuse a previous successful UI hierarchy.
+    adb shell rm -f /sdcard/nia-smoke-ui.xml
+    rm -f "$ui"
     adb shell uiautomator dump /sdcard/nia-smoke-ui.xml >"$OUT/$phase-dump.txt" 2>&1 || true
     adb exec-out cat /sdcard/nia-smoke-ui.xml >"$ui" 2>/dev/null || true
     # The emulator's Pixel Launcher sometimes reports ANR over a running app.
@@ -67,13 +75,17 @@ PY
       echo "::error::Emulator infrastructure problem: system ANR dialog could not be dismissed"
       return 1
     fi
-    if grep -q 'Model loading failed:' "$ui"; then
+    scene_status=0
+    python3 scripts/verify-android-scene.py "$ui" || scene_status=$?
+    if [ "$scene_status" -eq 2 ]; then
       capture "$phase-glb-error"
       echo "::error::Nia showed a GLB load failure during $phase"
       grep -o 'text="Model loading failed:[^"]*"' "$ui" | head -1 || true
       return 1
     fi
-    if grep -q 'Diagnostics: Rigged' "$ui" && grep -q 'bones: 25' "$ui"; then
+    # Diagnostics: Rigged with bones: 25 must belong to Nia and report
+    # nonzero skinned geometry; unrelated or static-preview text cannot pass.
+    if [ "$scene_status" -eq 0 ] && adb shell pidof "$APP" >/dev/null; then
       capture "$phase-success"
       cp "$ui" "$OUT/$phase-success-ui.xml"
       echo "PASS: $phase displayed the real Nia 25-bone rig in the Android UI"
@@ -96,4 +108,167 @@ adb shell input keyevent KEYCODE_HOME
 sleep 5
 adb shell am start -W -n "$APP/.MainActivity" | tee "$OUT/resume.txt"
 verify_scene resume
-echo "PASS: APK install, Android UI rig rendering, background and resume verified"
+
+# Query only Nia-owned accessibility nodes, including its system overlay WebView.
+uia_query() {
+  python3 - "$@" <<'PY_OVERLAY_QUERY'
+import re,sys,xml.etree.ElementTree as ET
+try:
+    all_nodes=list(ET.parse(sys.argv[1]).getroot().iter('node'))
+    nodes=[n for n in all_nodes if n.get('package')=='com.nia.companion']
+except (ET.ParseError,OSError):
+    sys.exit(1)
+mode=sys.argv[2]
+texts=[n.get('text','') for n in nodes]
+if mode=='status':
+    if any(text.startswith('Floating Nia: error') for text in texts): sys.exit(2)
+    sys.exit(0 if 'Floating Nia: ready' in texts else 1)
+if mode=='tap':
+    wanted=sys.argv[3].casefold()
+    for node in nodes:
+        if node.get('text','').casefold()!=wanted or node.get('enabled')=='false': continue
+        bounds=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
+        if len(bounds)==4 and bounds[2]>bounds[0] and bounds[3]>bounds[1]:
+            print((bounds[0]+bounds[2])//2,(bounds[1]+bounds[3])//2)
+            sys.exit(0)
+sys.exit(1)
+PY_OVERLAY_QUERY
+}
+
+fresh_overlay_ui() {
+  local ui="$1"
+  adb shell rm -f /sdcard/nia-overlay-smoke.xml
+  rm -f "$ui"
+  adb shell uiautomator dump /sdcard/nia-overlay-smoke.xml >"$OUT/overlay-dump.txt" 2>&1 || true
+  adb exec-out cat /sdcard/nia-overlay-smoke.xml >"$ui" 2>/dev/null || true
+}
+
+tap_label() {
+  local label="$1" scroll="${2:-false}" coords i
+  local ui="$OUT/overlay-control-ui.xml"
+  for i in $(seq 1 12); do
+    fresh_overlay_ui "$ui"
+    coords="$(uia_query "$ui" tap "$label" || true)"
+    if [ -n "$coords" ]; then adb shell input tap $coords; return 0; fi
+    if [ "$scroll" = true ]; then
+      # Pixel sizes vary with emulator profile. Scroll within its current display.
+      read -r sw sh < <(adb shell wm size | python3 -c 'import re,sys; values=re.findall(r"(\d+)x(\d+)",sys.stdin.read()); print(*values[-1])')
+      adb shell input swipe "$((sw/2))" "$((sh*3/4))" "$((sw/2))" "$((sh/3))" 350
+    fi
+    sleep 2
+  done
+  capture overlay-control-missing
+  echo "::error::Could not find Nia control: $label"
+  return 1
+}
+
+# Nonfocusable system overlays are absent from UIAutomator's active-window XML.
+# Read WindowManager for their actual surface, frame and foreground-app evidence.
+overlay_window() {
+  python3 - "$@" <<'PY_OVERLAY_WINDOW'
+import re,sys
+try:
+    data=open(sys.argv[1],encoding='utf8').read()
+except OSError:
+    sys.exit(1)
+if not data.strip(): sys.exit(1)
+blocks=re.split(r'(?m)^\s*Window #\d+ ',data)[1:]
+owned=[block for block in blocks if 'com.nia.companion' in block.split('\n',1)[0] or re.search(r'\bpackage=com\.nia\.companion\b',block)]
+overlays=[block for block in owned if re.search(r'\bty=(?:APPLICATION_OVERLAY|2038)\b',block)]
+mode=sys.argv[2]
+if mode=='closed':
+    # A valid Windows dump must identify a different window after Home.
+    sys.exit(0 if blocks and not overlays else 1)
+if mode=='home':
+    focus=re.search(r'(?m)^\s*mCurrentFocus=(.*)$',data)
+    sys.exit(0 if focus and re.search(r'(?:nexuslauncher|launcher3|com\.android\.launcher)',focus[1],re.I) else 1)
+for block in overlays:
+    visible='mHasSurface=true' in block and re.search(r'(?:isOnScreen|isVisible)=true|isReadyForDisplay\(\)=true',block)
+    if not visible or re.search(r'mViewVisibility=0x[1-9a-f]',block,re.I): continue
+    frame=re.search(r'\b(?:frame|mFrame)=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]',block)
+    if not frame: continue
+    left,top,right,bottom=map(int,frame.groups())
+    if left<0 or top<0 or right<=left or bottom<=top: continue
+    if mode=='visible': sys.exit(0)
+    if mode=='close':
+        density_text=open(sys.argv[3],encoding='utf8').read()
+        densities=re.findall(r'(?:Physical|Override) density:\s*(\d+)',density_text)
+        if not densities: sys.exit(1)
+        row_height=round(44*int(densities[-1])/160)
+        if row_height<=0 or row_height>=bottom-top: sys.exit(1)
+        # Third of three equal native buttons, centered in its 44dp bottom row.
+        print(left+(right-left)*5//6,bottom-row_height//2)
+        sys.exit(0)
+sys.exit(1)
+PY_OVERLAY_WINDOW
+}
+
+capture_overlay_state() {
+  local phase="$1"
+  adb shell dumpsys window windows >"$OUT/$phase-windows.txt"
+  # Current-focus fields may be printed by the unfiltered WindowManager dump.
+  adb shell dumpsys window >"$OUT/$phase-window-focus.txt"
+  adb shell dumpsys SurfaceFlinger --list >"$OUT/$phase-surfaces.txt"
+  adb logcat -d -v time -s NiaOverlay:I >"$OUT/$phase-overlay-logcat.txt"
+}
+
+verify_overlay() {
+  local phase="$1" i state
+  local ui="$OUT/$phase-ui.xml"
+  for i in $(seq 1 24); do
+    capture_overlay_state "$phase"
+    if grep -Eq 'NiaOverlay.*(error:|NIA_OVERLAY_ERROR)' "$OUT/$phase-overlay-logcat.txt"; then
+      capture "$phase-render-error"
+      echo "::error::Floating Nia renderer reported an error during $phase"
+      return 1
+    fi
+    # Logcat was cleared immediately before Show. READY is emitted only after
+    # renderer.info.render.calls confirms actual geometry was drawn.
+    state=0
+    if [ "$phase" = overlay-start ]; then
+      fresh_overlay_ui "$ui"
+      uia_query "$ui" status || state=$?
+    else
+      # Verify Home is foreground, rather than merely returning the Nia activity.
+      overlay_window "$OUT/$phase-window-focus.txt" home || state=1
+    fi
+    if [ "$state" -eq 2 ]; then
+      capture "$phase-status-error"; echo "::error::Floating Nia reported failure"; return 1
+    fi
+    if [ "$state" -eq 0 ] && grep -q 'NiaOverlay.*NIA_OVERLAY_READY' "$OUT/$phase-overlay-logcat.txt" &&
+       overlay_window "$OUT/$phase-windows.txt" visible; then
+      capture "$phase-success"
+      return 0
+    fi
+    sleep 3
+  done
+  capture "$phase-timeout"
+  echo "::error::Floating Nia lacked fresh render readiness and a visible application-overlay surface during $phase"
+  return 1
+}
+
+# Grant only the overlay app-op under test; no microphone/camera permissions.
+adb shell appops set "$APP" SYSTEM_ALERT_WINDOW allow
+adb shell appops get "$APP" SYSTEM_ALERT_WINDOW | tee "$OUT/overlay-appops.txt"
+adb logcat -c
+# Stale READY from a previous launch cannot satisfy this test.
+tap_label "Show floating Nia" true
+verify_overlay overlay-start
+adb shell input keyevent KEYCODE_HOME
+sleep 5
+verify_overlay overlay-home
+adb shell wm density >"$OUT/overlay-density.txt"
+# UIAutomator cannot see nonfocusable overlay controls; derive the Close center
+# from the live WindowManager frame and the compiled service's native 44dp row.
+close_coords="$(overlay_window "$OUT/overlay-home-windows.txt" close "$OUT/overlay-density.txt")"
+adb shell input tap $close_coords
+overlay_closed=false
+for i in $(seq 1 12); do
+  capture_overlay_state overlay-closed
+  if overlay_window "$OUT/overlay-closed-windows.txt" closed; then overlay_closed=true; break; fi
+  sleep 2
+done
+if [ "$overlay_closed" != true ]; then capture overlay-close-failed; echo "::error::Floating Nia did not close"; exit 1; fi
+capture overlay-closed
+adb shell am start -W -n "$APP/.MainActivity" | tee "$OUT/overlay-return.txt"
+echo "PASS: APK install, Android UI rig, floating 3D over Home, close, background and resume verified"
