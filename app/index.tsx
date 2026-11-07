@@ -13,6 +13,8 @@ import Avatar3D from '../src/Avatar3D';
 import {VisemeCue} from '../src/visemes';
 import {secureUrl,fetchWithTimeout} from '../src/network';
 import {loadConversation,saveConversation,deleteConversation} from '../src/secureHistory';
+import {loadMemoryNotes,saveMemoryNotes as persistMemoryNotes,deleteMemoryNotes} from '../src/secureNotes';
+import {showNiaOverlay,hideNiaOverlay,niaOverlayStatus} from '../src/niaOverlay';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
@@ -56,6 +58,15 @@ export default function Home(){
  const speechVersion=useRef(0);
  const alignedPlayer=useRef<{stop:()=>void}|null>(null);
  const [loaded,setLoaded]=useState(false);
+ const [overlayStatus,setOverlayStatus]=useState('hidden');
+ const [overlayRequested,setOverlayRequested]=useState(false);
+ useEffect(()=>{
+  if(!overlayRequested)return;
+  let active=true;
+  const update=async()=>{if(AppState.currentState!=='active')return;try{const status=await niaOverlayStatus();if(active){setOverlayStatus(status);if(status==='hidden'||status.startsWith('error'))setOverlayRequested(false);}}catch(error){if(active){setOverlayStatus(String(error));setOverlayRequested(false);}}};
+  const timer=setInterval(()=>{void update()},1000);
+  return()=>{active=false;clearInterval(timer)};
+ },[overlayRequested]);
  useEffect(()=>()=>{voiceGeneration.current++;voiceAbort.current?.abort();alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();},[]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
@@ -75,16 +86,16 @@ export default function Home(){
   let active=true;
   (async()=>{
    try{
-    const [entries,apiToken,accessToken,enabled]=await Promise.all([
-     AsyncStorage.multiGet(['nia_endpoint','nia_model','nia_flirty','nia_memory_notes','nia_assistant_mode','nia_gateway_url','nia_gateway_enabled']),
-     SecureStore.getItemAsync('nia_api_token'),SecureStore.getItemAsync('nia_gateway_token'),checkInsEnabled()
+    const [entries,apiToken,accessToken,enabled,savedNotes]=await Promise.all([
+     AsyncStorage.multiGet(['nia_endpoint','nia_model','nia_flirty','nia_assistant_mode','nia_gateway_url','nia_gateway_enabled']),
+     SecureStore.getItemAsync('nia_api_token'),SecureStore.getItemAsync('nia_gateway_token'),checkInsEnabled(),loadMemoryNotes()
     ]);
     if(!active)return;
     const values=Object.fromEntries(entries);
     setMessages(await loadConversation());
     setEndpoint(values.nia_endpoint||'');setModel(values.nia_model||'llama-3.3-70b-versatile');
     setFlirty(values.nia_flirty!=='false');
-    const notes=values.nia_memory_notes||'';setMemoryNotes(notes);setMemoryDraft(notes);
+    setMemoryNotes(savedNotes);setMemoryDraft(savedNotes);
     const mode=values.nia_assistant_mode;
     if(mode==='research'||mode==='business'||mode==='companion')setAssistantMode(mode);
     setGatewayUrl(values.nia_gateway_url||'');setUseGateway(values.nia_gateway_enabled==='true');
@@ -246,10 +257,12 @@ export default function Home(){
   finally{operation.current=false;setVisionBusy(false);}
  }
  async function saveMemoryNotes(){
+  try{
   const notes=memoryDraft.trim().slice(0,2000);
-  await AsyncStorage.setItem('nia_memory_notes',notes);
+  await persistMemoryNotes(notes);
   setMemoryNotes(notes);
-  Alert.alert('Memory updated','Your notes are stored on this device and used as context in future conversations.');
+  Alert.alert('Memory updated','Your notes are stored securely on this device and used as context in future conversations.');
+  }catch(error){Alert.alert('Memory not saved',String(error));}
  }
  async function shareHistory(){
   if(!messages.length){Alert.alert('No messages yet','Start a conversation before exporting.');return;}
@@ -266,6 +279,13 @@ export default function Home(){
  return <SafeAreaView style={s.screen} edges={['top','bottom']}><ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
   <Avatar3D speaking={avatarSpeaking} visemes={visemeCues} playbackMs={audioPositionMs}/>
+  <Pressable style={s.secondary} onPress={async()=>{try{
+   const result=await showNiaOverlay();
+   if(result==='permission-required'){Alert.alert('Floating Nia permission','Allow display over other apps, return to Nia, then tap Show floating Nia.');return;}
+   setOverlayStatus('loading');setOverlayRequested(true);
+  }catch(error){Alert.alert('Floating Nia unavailable',String(error));}}}><Text style={s.white}>Show floating Nia</Text></Pressable>
+  <Pressable style={s.secondary} onPress={async()=>{try{await hideNiaOverlay();setOverlayStatus('hidden');setOverlayRequested(false);}catch(error){Alert.alert('Floating Nia unavailable',String(error));}}}><Text style={s.white}>Hide floating Nia</Text></Pressable>
+  <Text style={s.note}>Floating Nia: {overlayStatus}</Text>
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
   {cameraVisible?<View><CameraView ref={cameraRef} style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
@@ -292,7 +312,7 @@ export default function Home(){
     <Text style={s.note}>Memory notes — only information you choose to save</Text>
     <TextInput value={memoryDraft} onChangeText={setMemoryDraft} multiline style={s.input} placeholder="Preferences or details for Nia to remember" placeholderTextColor="#bbb"/>
     <Pressable onPress={saveMemoryNotes} style={s.secondary}><Text style={s.white}>Save memory notes</Text></Pressable>
-    <Pressable onPress={async()=>{await AsyncStorage.removeItem('nia_memory_notes');setMemoryNotes('');setMemoryDraft('');}} style={s.secondary}><Text style={s.white}>Erase memory notes</Text></Pressable>
+    <Pressable onPress={async()=>{try{await deleteMemoryNotes();setMemoryNotes('');setMemoryDraft('');}catch(error){Alert.alert('Memory not erased',String(error));}}} style={s.secondary}><Text style={s.white}>Erase memory notes</Text></Pressable>
     <Pressable disabled={busy||visionBusy} onPress={clearHistory} style={s.secondary}><Text style={s.white}>Delete conversation history</Text></Pressable>
    </View>:null}
   <Pressable onPress={callCapabilityNotice} style={s.secondary}><Text style={s.white}>Telephone assistant — dialer only</Text></Pressable>

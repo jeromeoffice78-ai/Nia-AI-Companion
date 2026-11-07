@@ -53,17 +53,23 @@ async function synthesize(text){
   return {audio,cues:timingToCues(events,durationMs)};
  }finally{synth.close();}
 }
-async function chat(data){
- if(!GROQ_KEY)throw Error('GROQ_API_KEY missing');
+export function buildChatPayload(data){
  const messages=data.messages;
  if(!Array.isArray(messages)||messages.length<1||messages.length>42||
    messages.some(m=>!m||!['user','assistant'].includes(m.role)||typeof m.content!=='string'||m.content.length>12000))
    throw Error('Invalid conversation');
  const mode=['companion','business','research'].includes(data.mode)?data.mode:'companion';
+ const style=data.flirty===true&&mode==='companion'?
+  'Light consensual flirting is welcome; stop if asked.':
+  'Keep a friendly, non-flirtatious tone.';
+ return {model:process.env.GROQ_MODEL||'llama-3.3-70b-versatile',stream:false,
+  messages:[{role:'system',content:'You are Nia, a truthful, caring AI companion. Mode: '+mode+'. Remain respectful and do not pretend to be human. '+style},...messages]};
+}
+async function chat(data){
+ if(!GROQ_KEY)throw Error('GROQ_API_KEY missing');
  const answer=await fetch('https://api.groq.com/openai/v1/chat/completions',{
   method:'POST',headers:{Authorization:'Bearer '+GROQ_KEY,'Content-Type':'application/json'},
-  body:JSON.stringify({model:process.env.GROQ_MODEL||'llama-3.3-70b-versatile',stream:false,
-   messages:[{role:'system',content:'You are Nia, a truthful, caring AI companion. Mode: '+mode+'. Remain respectful and do not pretend to be human.'},...messages]})
+  body:JSON.stringify(buildChatPayload(data))
   ,signal:AbortSignal.timeout(27000)
  });
  if(!answer.ok)throw Error('Groq HTTP '+answer.status);

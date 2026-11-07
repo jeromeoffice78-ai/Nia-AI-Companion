@@ -108,4 +108,102 @@ adb shell input keyevent KEYCODE_HOME
 sleep 5
 adb shell am start -W -n "$APP/.MainActivity" | tee "$OUT/resume.txt"
 verify_scene resume
-echo "PASS: APK install, Android UI rig rendering, background and resume verified"
+
+# Query only Nia-owned accessibility nodes, including its system overlay WebView.
+uia_query() {
+  python3 - "$@" <<'PY_OVERLAY_QUERY'
+import re,sys,xml.etree.ElementTree as ET
+try:
+    all_nodes=list(ET.parse(sys.argv[1]).getroot().iter('node'))
+    nodes=[n for n in all_nodes if n.get('package')=='com.nia.companion']
+except (ET.ParseError,OSError):
+    sys.exit(1)
+mode=sys.argv[2]
+texts=[n.get('text','') for n in nodes]
+if mode=='ready':
+    if any('3D overlay could not start:' in text for text in texts): sys.exit(2)
+    # Both labels are set by the offline renderer only after a geometry draw.
+    ready=any(re.search(r'(?:3D rig ready|Internal 3D test rig).*\b25 bones\b',text,re.I) for text in texts)
+    sys.exit(0 if ready and any('Nia • drag to move'==text for text in texts) else 1)
+if mode=='closed':
+    valid_screen=any(n.get('package') for n in all_nodes)
+    sys.exit(0 if valid_screen and 'Nia • drag to move' not in texts else 1)
+if mode=='tap':
+    wanted=sys.argv[3].casefold()
+    for node in nodes:
+        if node.get('text','').casefold()!=wanted or node.get('enabled')=='false': continue
+        bounds=list(map(int,re.findall(r'\d+',node.get('bounds',''))))
+        if len(bounds)==4 and bounds[2]>bounds[0] and bounds[3]>bounds[1]:
+            print((bounds[0]+bounds[2])//2,(bounds[1]+bounds[3])//2)
+            sys.exit(0)
+sys.exit(1)
+PY_OVERLAY_QUERY
+}
+
+fresh_overlay_ui() {
+  local ui="$1"
+  adb shell rm -f /sdcard/nia-overlay-smoke.xml
+  rm -f "$ui"
+  adb shell uiautomator dump /sdcard/nia-overlay-smoke.xml >"$OUT/overlay-dump.txt" 2>&1 || true
+  adb exec-out cat /sdcard/nia-overlay-smoke.xml >"$ui" 2>/dev/null || true
+}
+
+tap_label() {
+  local label="$1" scroll="${2:-false}" coords i
+  local ui="$OUT/overlay-control-ui.xml"
+  for i in $(seq 1 12); do
+    fresh_overlay_ui "$ui"
+    coords="$(uia_query "$ui" tap "$label" || true)"
+    if [ -n "$coords" ]; then adb shell input tap $coords; return 0; fi
+    if [ "$scroll" = true ]; then
+      # Pixel sizes vary with emulator profile. Scroll within its current display.
+      read -r sw sh < <(adb shell wm size | python3 -c 'import re,sys; values=re.findall(r"(\d+)x(\d+)",sys.stdin.read()); print(*values[-1])')
+      adb shell input swipe "$((sw/2))" "$((sh*3/4))" "$((sw/2))" "$((sh/3))" 350
+    fi
+    sleep 2
+  done
+  capture overlay-control-missing
+  echo "::error::Could not find Nia control: $label"
+  return 1
+}
+
+verify_overlay() {
+  local phase="$1" i state
+  local ui="$OUT/$phase-ui.xml"
+  for i in $(seq 1 24); do
+    fresh_overlay_ui "$ui"
+    state=0
+    uia_query "$ui" ready || state=$?
+    if [ "$state" -eq 0 ]; then capture "$phase-success"; return 0; fi
+    if [ "$state" -eq 2 ]; then
+      capture "$phase-render-error"
+      echo "::error::Floating Nia renderer reported an error during $phase"
+      return 1
+    fi
+    sleep 3
+  done
+  capture "$phase-timeout"
+  echo "::error::Floating Nia did not show rendered 3D rig diagnostics during $phase"
+  return 1
+}
+
+# Grant only the overlay app-op under test; no microphone/camera permissions.
+adb shell appops set "$APP" SYSTEM_ALERT_WINDOW allow
+adb shell appops get "$APP" SYSTEM_ALERT_WINDOW | tee "$OUT/overlay-appops.txt"
+tap_label "Show floating Nia" true
+verify_overlay overlay-start
+adb shell input keyevent KEYCODE_HOME
+sleep 5
+verify_overlay overlay-home
+tap_label "Close"
+overlay_closed=false
+for i in $(seq 1 12); do
+  fresh_overlay_ui "$OUT/overlay-closed-ui.xml"
+  # Require a real UI dump: an empty/malformed dump cannot prove closure.
+  if uia_query "$OUT/overlay-closed-ui.xml" closed; then overlay_closed=true; break; fi
+  sleep 2
+done
+if [ "$overlay_closed" != true ]; then capture overlay-close-failed; echo "::error::Floating Nia did not close"; exit 1; fi
+capture overlay-closed
+adb shell am start -W -n "$APP/.MainActivity" | tee "$OUT/overlay-return.txt"
+echo "PASS: APK install, Android UI rig, floating 3D over Home, close, background and resume verified"
