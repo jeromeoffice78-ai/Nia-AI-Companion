@@ -67,34 +67,68 @@ function overlayQuery(nodes,mode,label=''){
   return {status:result.status,text:result.stdout.trim()};
  }finally{rmSync(dir,{recursive:true,force:true});}
 }
-function overlayNodes(label,packageName='com.nia.companion'){
- return `<hierarchy><node package="${packageName}" text="Nia • drag to move"/><node package="${packageName}" text="${label}"/></hierarchy>`;
+test('native status requires explicit Nia readiness and rejects provider errors or stale foreign text',()=>{
+ const xml=text=>`<hierarchy><node package="com.nia.companion" text="${text}"/></hierarchy>`;
+ assert.equal(overlayQuery(xml('Floating Nia: ready'),'status').status,0);
+ assert.equal(overlayQuery(xml('Floating Nia: loading'),'status').status,1);
+ assert.equal(overlayQuery(xml('Floating Nia: error: WebGL stopped'),'status').status,2);
+ assert.equal(overlayQuery(xml('Floating Nia: ready').replace('com.nia.companion','com.android.launcher'),'status').status,1);
+ assert.equal(overlayQuery('<hierarchy>','status').status,1);
+});
+function windowQuery(data,mode,density='Physical density: 420'){
+ const script=read('scripts/android-emulator-smoke.sh');
+ const code=script.match(/<<'PY_OVERLAY_WINDOW'\n([\s\S]*?)\nPY_OVERLAY_WINDOW/)[1];
+ const dir=mkdtempSync(join(tmpdir(),'nia-overlay-window-'));
+ try{
+  const windows=join(dir,'windows.txt'),scale=join(dir,'density.txt');
+  writeFileSync(windows,data);writeFileSync(scale,density);
+  const result=spawnSync('python3',['-',windows,mode,scale],{input:code,encoding:'utf8'});
+  return {status:result.status,text:result.stdout.trim()};
+ }finally{rmSync(dir,{recursive:true,force:true});}
 }
-test('overlay requires real rendered diagnostics from Nia and detects explicit render failure',()=>{
- assert.equal(overlayQuery(overlayNodes('Internal 3D test rig • 25 bones'),'ready').status,0);
- assert.equal(overlayQuery(overlayNodes('3D rig ready • 25 bones'),'ready').status,0);
- assert.equal(overlayQuery(overlayNodes('Internal 3D test rig • 25 bones','com.android.launcher'),'ready').status,1);
- assert.equal(overlayQuery(overlayNodes('Loading bundled 3D test rig…'),'ready').status,1);
- assert.equal(overlayQuery(overlayNodes('Internal 3D test rig • 250 bones'),'ready').status,1);
- assert.equal(overlayQuery(overlayNodes('3D overlay could not start: WebGL unavailable'),'ready').status,2);
- assert.equal(overlayQuery('<hierarchy>','ready').status,1);
+const homeWindow=`WINDOW MANAGER WINDOWS (dumpsys window windows)
+  Window #0 Window{a123 u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}:
+    mAttrs={(0,0)(fillxfill) ty=BASE_APPLICATION}
+    mHasSurface=true isOnScreen=true isVisible=true
+  mCurrentFocus=Window{a123 u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}
+`;
+const overlayWindow=`  Window #1 Window{b234 u0 com.nia.companion}:
+    mOwnerUid=10234 package=com.nia.companion appop=SYSTEM_ALERT_WINDOW
+    mAttrs={(270,600)(540x1200) ty=APPLICATION_OVERLAY fmt=TRANSLUCENT}
+    mViewVisibility=0x0 mHasSurface=true
+    Frames: parent=[0,0][1080,2400] display=[0,0][1080,2400] frame=[270,600][810,1800]
+    isOnScreen=true isVisible=true
+`;
+test('visible application-overlay proof rejects invisible, missing, foreign or ordinary activity windows',()=>{
+ assert.equal(windowQuery(homeWindow+overlayWindow,'visible').status,0);
+ assert.equal(windowQuery(homeWindow+overlayWindow.replace('APPLICATION_OVERLAY','2038'),'visible').status,0);
+ assert.equal(windowQuery(homeWindow,'visible').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow.replace('mHasSurface=true','mHasSurface=false'),'visible').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow.replaceAll('=true','=false'),'visible').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow.replace('mViewVisibility=0x0','mViewVisibility=0x8'),'visible').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow.replaceAll('com.nia.companion','com.other.app'),'visible').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow.replace('APPLICATION_OVERLAY','BASE_APPLICATION'),'visible').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow.replace('frame=[270,600][810,1800]','frame=[0,0][0,0]'),'visible').status,1);
 });
-test('native ready handle verifies rendering and cannot falsely pass overlay closure',()=>{
- const ready=overlayNodes('Internal 3D test rig • 25 bones').replace('Nia • drag to move','3D rig ready • drag to move');
- assert.equal(overlayQuery(ready,'ready').status,0);
- assert.equal(overlayQuery(ready,'closed').status,1);
- assert.equal(overlayQuery(ready.replace('Internal 3D test rig • 25 bones','Loading bundled 3D test rig…'),'ready').status,1);
+test('nonfocusable overlay Close uses actual window frame and density; disappearance is verified independently of UIA',()=>{
+ assert.deepEqual(windowQuery(homeWindow+overlayWindow,'close'),{status:0,text:'720 1742'});
+ assert.deepEqual(windowQuery(homeWindow+overlayWindow,'close','Physical density: 420\nOverride density: 320'),{status:0,text:'720 1756'});
+ assert.equal(windowQuery(homeWindow+overlayWindow,'close','').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow,'closed').status,1);
+ assert.equal(windowQuery(homeWindow,'closed').status,0);
+ assert.equal(windowQuery('','closed').status,1);
+ assert.equal(windowQuery(homeWindow+overlayWindow,'home').status,0);
+ assert.equal(windowQuery(homeWindow.replace('mCurrentFocus=Window{a123 u0 com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity}','mCurrentFocus=Window{c123 u0 com.nia.companion/.MainActivity}'),'home').status,1);
 });
-test('overlay close control is located by Nia bounds and closure requires fresh valid UI',()=>{
- const xml='<hierarchy><node package="com.nia.companion" text="CLOSE" bounds="[100,200][300,260]" enabled="true"/></hierarchy>';
- assert.deepEqual(overlayQuery(xml,'tap','Close'),{status:0,text:'200 230'});
- assert.equal(overlayQuery(xml.replace('com.nia.companion','com.android.launcher'),'tap','Close').status,1);
- assert.equal(overlayQuery(overlayNodes('Internal 3D test rig • 25 bones'),'closed').status,1);
- assert.equal(overlayQuery('<hierarchy><node package="com.android.launcher" text="Home"/></hierarchy>','closed').status,0);
- assert.equal(overlayQuery('<hierarchy/>','closed').status,1);
- assert.equal(overlayQuery('','closed').status,1);
+test('overlay proof requires fresh post-Show renderer readiness and captures surfaces over Home',()=>{
  const script=read('scripts/android-emulator-smoke.sh');
  assert.match(script,/appops set "\$APP" SYSTEM_ALERT_WINDOW allow/);
+ assert.match(script,/adb logcat -c\n# Stale READY[\s\S]*?tap_label "Show floating Nia" true/);
+ assert.match(script,/NiaOverlay\.\*NIA_OVERLAY_READY/);
+ assert.match(script,/NiaOverlay\.\*\(error:\|NIA_OVERLAY_ERROR\)/);
+ assert.match(script,/overlay_window "\$OUT\/\$phase-windows.txt" visible/);
+ assert.match(script,/dumpsys SurfaceFlinger --list/);
  assert.match(script,/verify_overlay overlay-home/);
- assert.match(script,/tap_label "Close"/);
+ assert.match(script,/overlay-home-windows.txt" close/);
+ assert.match(script,/overlay-closed-windows.txt" closed/);
 });
