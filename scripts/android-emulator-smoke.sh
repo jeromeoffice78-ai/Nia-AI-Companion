@@ -120,14 +120,15 @@ except (ET.ParseError,OSError):
     sys.exit(1)
 mode=sys.argv[2]
 texts=[n.get('text','') for n in nodes]
+handles={'Nia • drag to move','3D rig ready • drag to move'}
 if mode=='ready':
     if any('3D overlay could not start:' in text for text in texts): sys.exit(2)
     # Both labels are set by the offline renderer only after a geometry draw.
     ready=any(re.search(r'(?:3D rig ready|Internal 3D test rig).*\b25 bones\b',text,re.I) for text in texts)
-    sys.exit(0 if ready and any('Nia • drag to move'==text for text in texts) else 1)
+    sys.exit(0 if ready and any(text in handles for text in texts) else 1)
 if mode=='closed':
     valid_screen=any(n.get('package') for n in all_nodes)
-    sys.exit(0 if valid_screen and 'Nia • drag to move' not in texts else 1)
+    sys.exit(0 if valid_screen and not any(text in handles for text in texts) else 1)
 if mode=='tap':
     wanted=sys.argv[3].casefold()
     for node in nodes:

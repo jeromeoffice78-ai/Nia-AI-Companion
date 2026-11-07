@@ -79,6 +79,12 @@ test('overlay requires real rendered diagnostics from Nia and detects explicit r
  assert.equal(overlayQuery(overlayNodes('3D overlay could not start: WebGL unavailable'),'ready').status,2);
  assert.equal(overlayQuery('<hierarchy>','ready').status,1);
 });
+test('native ready handle verifies rendering and cannot falsely pass overlay closure',()=>{
+ const ready=overlayNodes('Internal 3D test rig • 25 bones').replace('Nia • drag to move','3D rig ready • drag to move');
+ assert.equal(overlayQuery(ready,'ready').status,0);
+ assert.equal(overlayQuery(ready,'closed').status,1);
+ assert.equal(overlayQuery(ready.replace('Internal 3D test rig • 25 bones','Loading bundled 3D test rig…'),'ready').status,1);
+});
 test('overlay close control is located by Nia bounds and closure requires fresh valid UI',()=>{
  const xml='<hierarchy><node package="com.nia.companion" text="CLOSE" bounds="[100,200][300,260]" enabled="true"/></hierarchy>';
  assert.deepEqual(overlayQuery(xml,'tap','Close'),{status:0,text:'200 230'});

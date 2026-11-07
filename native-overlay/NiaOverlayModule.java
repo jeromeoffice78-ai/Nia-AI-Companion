@@ -32,10 +32,11 @@ public class NiaOverlayModule extends ReactContextBaseJavaModule {
    if(!activity.hasWindowFocus()){promise.reject("NOT_VISIBLE","Keep Nia visible while starting the floating avatar");return;}
    if(Build.VERSION.SDK_INT>=23&&!Settings.canDrawOverlays(context)){promise.reject("NO_PERMISSION","Allow display over other apps in Android settings");return;}
    try{
+    if(!"ready".equals(NiaOverlayService.status)&&!"loading".equals(NiaOverlayService.status))NiaOverlayService.status="loading";
     Intent intent=new Intent(context,NiaOverlayService.class);
     if(Build.VERSION.SDK_INT>=26)context.startForegroundService(intent);else context.startService(intent);
     promise.resolve(true);
-   }catch(Exception e){promise.reject("OVERLAY_START",e);}
+   }catch(Exception e){NiaOverlayService.status="error: "+e.getClass().getSimpleName();promise.reject("OVERLAY_START",e);}
   });
  }
  @ReactMethod public void hide(Promise promise){
