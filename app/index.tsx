@@ -6,7 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
 import {useAudioRecorder,RecordingPresets,requestRecordingPermissionsAsync,setAudioModeAsync,createAudioPlayer} from 'expo-audio';
 import {requestAlignedSpeech,AlignedSpeechUnavailable} from '../src/alignedSpeech';
-import {transcribeAudio} from '../src/voice';
+import {transcribeRecording,validateRecordingConnection,RecordingConnection} from '../src/voice';
 import {CameraView,useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import Avatar3D from '../src/Avatar3D';
@@ -21,6 +21,9 @@ type Message={role:'user'|'assistant';content:string};
 export default function Home(){
  const recorder=useAudioRecorder(RecordingPresets.HIGH_QUALITY);
  const recordingRef=useRef(false);
+ const recordingConnection=useRef<RecordingConnection|null>(null);
+ const voiceGeneration=useRef(0);
+ const voiceAbort=useRef<AbortController|null>(null);
  const [recording,setRecording]=useState(false);
  const [voiceBusy,setVoiceBusy]=useState(false);
  const [messages,setMessages]=useState<Message[]>([]);
@@ -53,12 +56,13 @@ export default function Home(){
  const speechVersion=useRef(0);
  const alignedPlayer=useRef<{stop:()=>void}|null>(null);
  const [loaded,setLoaded]=useState(false);
- useEffect(()=>()=>{alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();},[]);
+ useEffect(()=>()=>{voiceGeneration.current++;voiceAbort.current?.abort();alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();},[]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
    if(state!=='active'){
+    voiceGeneration.current++;voiceAbort.current?.abort();
     speechVersion.current++;setCameraVisible(false);
-    if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{});operation.current=false;}
+    if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{}).finally(()=>{operation.current=false;recordingConnection.current=null;});}
     alignedPlayer.current?.stop();alignedPlayer.current=null;
     void Speech.stop();
     setAvatarSpeaking(false);setAudioPositionMs(null);
@@ -179,29 +183,37 @@ export default function Home(){
  async function toggleVoice(){
   if(voiceBusy||!loaded)return;
   if(!recordingRef.current&&operation.current)return;
-  if(useGateway&&!recordingRef.current){Alert.alert('Voice connection','Voice transcription currently requires the direct Groq-compatible connection. Gateway voice is not implemented.');return;}
   operation.current=true;setVoiceBusy(true);
+  const generation=++voiceGeneration.current;
   try{
    if(recordingRef.current){
     recordingRef.current=false;setRecording(false);await recorder.stop();
     await setAudioModeAsync({allowsRecording:false});
     if(!recorder.uri)throw new Error('No recording was saved.');
-    const transcript=await transcribeAudio(recorder.uri,endpoint,token);setDraft(transcript);
+    const connection=recordingConnection.current;
+    if(!connection)throw new Error('Recording connection was lost. Record again.');
+    const version=historyVersion.current;
+    voiceAbort.current=new AbortController();
+    if(generation!==voiceGeneration.current||AppState.currentState!=='active')return;
+    const transcript=await transcribeRecording(recorder.uri,connection,voiceAbort.current.signal);
+    if(version===historyVersion.current&&generation===voiceGeneration.current)
+     setDraft(current=>current.trim()?current.trim()+'\n'+transcript:transcript);
    }else{
-    secureUrl(endpoint);
-    if(!token.trim())throw new Error('Save your AI connection token first.');
+    recordingConnection.current=validateRecordingConnection(useGateway?
+     {gateway:true,endpoint:gatewayUrl,token:gatewayToken}:{gateway:false,endpoint,token});
     const permission=await requestRecordingPermissionsAsync();
+    if(generation!==voiceGeneration.current)return;
     if(!permission.granted)throw new Error('Microphone permission was not granted.');
     speechVersion.current++;alignedPlayer.current?.stop();alignedPlayer.current=null;await Speech.stop();setAvatarSpeaking(false);setAudioPositionMs(null);
     await setAudioModeAsync({allowsRecording:true,playsInSilentMode:true});
     if(AppState.currentState!=='active')throw new Error('Return to Nia before recording.');
     await recorder.prepareToRecordAsync();
-    if(AppState.currentState!=='active')throw new Error('Recording was cancelled while Nia was backgrounded.');
+    if(generation!==voiceGeneration.current||AppState.currentState!=='active')throw new Error('Recording was cancelled while Nia was backgrounded.');
     recorder.record();
     recordingRef.current=true;setRecording(true);operation.current=true;
    }
-  }catch(error){recordingRef.current=false;setRecording(false);await recorder.stop().catch(()=>{});await setAudioModeAsync({allowsRecording:false}).catch(()=>{});Alert.alert('Voice unavailable',String(error));}
-  finally{setVoiceBusy(false);if(!recordingRef.current)operation.current=false;}
+  }catch(error){recordingRef.current=false;setRecording(false);await recorder.stop().catch(()=>{});await setAudioModeAsync({allowsRecording:false}).catch(()=>{});if(generation===voiceGeneration.current)Alert.alert('Voice unavailable',String(error));}
+  finally{voiceAbort.current=null;setVoiceBusy(false);if(!recordingRef.current){operation.current=false;recordingConnection.current=null;}}
  }
  async function lookAtScene(){
   if(operation.current||voiceBusy||!loaded)return;

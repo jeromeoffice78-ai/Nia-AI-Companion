@@ -17,7 +17,7 @@ The Android workflows run checks before generating a standalone test APK with em
 
 ## Connection
 
-Use a separately deployed Nia gateway base URL and client token, or configure a trusted OpenAI-compatible endpoint. Tokens are kept in device secure storage. Conversation history and approved notes use device storage; they are not application-level encrypted. Direct Groq-compatible voice transcription requires a configured account and network access. Voice drafts are sent only after recording; review the text before sending chat.
+Use a separately deployed Nia gateway base URL and client token, or configure a trusted OpenAI-compatible endpoint. Tokens are kept in device secure storage. Conversation history uses chunked SecureStore storage. Approved memory notes remain in AsyncStorage and are not application-level encrypted. Direct Groq-compatible voice transcription requires a configured account and network access. Recorded voice works with the direct connection or the authenticated gateway transcription endpoint. Review the resulting draft before sending chat.
 
 ## Automated Android emulator smoke test
 

@@ -8,7 +8,12 @@ OUT=artifacts/android-smoke
 mkdir -p "$OUT"
 test -s "$APK"
 adb wait-for-device
-until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do sleep 2; done
+booted=false
+for i in $(seq 1 90); do
+  if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; then booted=true; break; fi
+  sleep 2
+done
+if [ "$booted" != true ]; then echo "::error::Android did not finish booting within 180 seconds"; exit 1; fi
 adb install -r "$APK" | tee "$OUT/install.txt"
 adb shell pm path "$APP" | grep -q package: || { echo "::error::Nia APK is not installed"; exit 1; }
 adb logcat -c
@@ -28,6 +33,9 @@ verify_scene() {
   # Slow software GL / cold Android initialization can take substantially
   # longer than the old 5-second pidof check. Poll for visible diagnostics.
   for i in $(seq 1 24); do
+    # A failed dump must never reuse a previous successful UI hierarchy.
+    adb shell rm -f /sdcard/nia-smoke-ui.xml
+    rm -f "$ui"
     adb shell uiautomator dump /sdcard/nia-smoke-ui.xml >"$OUT/$phase-dump.txt" 2>&1 || true
     adb exec-out cat /sdcard/nia-smoke-ui.xml >"$ui" 2>/dev/null || true
     # The emulator's Pixel Launcher sometimes reports ANR over a running app.
@@ -67,13 +75,17 @@ PY
       echo "::error::Emulator infrastructure problem: system ANR dialog could not be dismissed"
       return 1
     fi
-    if grep -q 'Model loading failed:' "$ui"; then
+    scene_status=0
+    python3 scripts/verify-android-scene.py "$ui" || scene_status=$?
+    if [ "$scene_status" -eq 2 ]; then
       capture "$phase-glb-error"
       echo "::error::Nia showed a GLB load failure during $phase"
       grep -o 'text="Model loading failed:[^"]*"' "$ui" | head -1 || true
       return 1
     fi
-    if grep -q 'Diagnostics: Rigged' "$ui" && grep -q 'bones: 25' "$ui"; then
+    # Diagnostics: Rigged with bones: 25 must belong to Nia and report
+    # nonzero skinned geometry; unrelated or static-preview text cannot pass.
+    if [ "$scene_status" -eq 0 ] && adb shell pidof "$APP" >/dev/null; then
       capture "$phase-success"
       cp "$ui" "$OUT/$phase-success-ui.xml"
       echo "PASS: $phase displayed the real Nia 25-bone rig in the Android UI"

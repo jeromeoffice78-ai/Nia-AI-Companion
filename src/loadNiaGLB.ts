@@ -230,7 +230,12 @@ export async function mountNiaGLB(gl:any, assetModule:number|string) {
    const wasPaused=paused;
    paused=!value;
    if(paused){cancelAnimationFrame(frame);clock.stop();}
-   else if(wasPaused){clock.start();tick();}
+   else if(wasPaused){
+    // Three.Clock.start() resets elapsedTime. Preserve the scene timeline so
+    // procedural poses, blinks and demo cue offsets do not jump on resume.
+    const elapsedTime=clock.elapsedTime;
+    clock.start();clock.elapsedTime=elapsedTime;tick();
+   }
   },setVisemes(value:VisemeCue[]){cues=validateVisemes(value);cueStartedAt=clock.elapsedTime},
   setPlaybackPosition(value:number|null){audioPlaybackMs=value===null?null:Math.max(0,Number.isFinite(value)?value:0);},dispose(){
   active=false;cancelAnimationFrame(frame);mixer.stopAllAction();
