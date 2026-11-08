@@ -6,13 +6,16 @@ import * as SecureStore from 'expo-secure-store';
 import * as Speech from 'expo-speech';
 import {useAudioRecorder,RecordingPresets,requestRecordingPermissionsAsync,setAudioModeAsync,createAudioPlayer} from 'expo-audio';
 import {requestAlignedSpeech,AlignedSpeechUnavailable} from '../src/alignedSpeech';
-import {transcribeAudio} from '../src/voice';
+import {transcribeRecording,validateRecordingConnection,RecordingConnection} from '../src/voice';
 import {CameraView,useCameraPermissions} from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import Avatar3D from '../src/Avatar3D';
 import {VisemeCue} from '../src/visemes';
 import {secureUrl,fetchWithTimeout} from '../src/network';
 import {loadConversation,saveConversation,deleteConversation} from '../src/secureHistory';
+import {loadMemoryNotes,saveMemoryNotes as persistMemoryNotes,deleteMemoryNotes} from '../src/secureNotes';
+import {showNiaOverlay,hideNiaOverlay,niaOverlayStatus,sendNiaOverlaySpeech,clearNiaOverlaySpeech} from '../src/niaOverlay';
+import {overlaySpeechFrame} from '../src/overlaySpeech';
 import {openDialer,callCapabilityNotice} from '../src/phone';
 import {enableCheckIns,disableCheckIns,checkInsEnabled} from '../src/checkIns';
 import {chatWithGateway,checkGateway,normalizeGatewayUrl} from '../src/niaGateway';
@@ -21,6 +24,9 @@ type Message={role:'user'|'assistant';content:string};
 export default function Home(){
  const recorder=useAudioRecorder(RecordingPresets.HIGH_QUALITY);
  const recordingRef=useRef(false);
+ const recordingConnection=useRef<RecordingConnection|null>(null);
+ const voiceGeneration=useRef(0);
+ const voiceAbort=useRef<AbortController|null>(null);
  const [recording,setRecording]=useState(false);
  const [voiceBusy,setVoiceBusy]=useState(false);
  const [messages,setMessages]=useState<Message[]>([]);
@@ -53,12 +59,27 @@ export default function Home(){
  const speechVersion=useRef(0);
  const alignedPlayer=useRef<{stop:()=>void}|null>(null);
  const [loaded,setLoaded]=useState(false);
- useEffect(()=>()=>{alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();},[]);
+ const [overlayStatus,setOverlayStatus]=useState('hidden');
+ const [overlayRequested,setOverlayRequested]=useState(false);
+ useEffect(()=>{
+  if(!overlayRequested||overlayStatus!=='ready')return;
+  try{void sendNiaOverlaySpeech(overlaySpeechFrame(visemeCues,audioPositionMs,avatarSpeaking)).catch(()=>{});}catch{void clearNiaOverlaySpeech().catch(()=>{});}
+ },[overlayRequested,overlayStatus,visemeCues,audioPositionMs,avatarSpeaking]);
+ useEffect(()=>{
+  if(!overlayRequested)return;
+  let active=true;
+  const update=async()=>{if(AppState.currentState!=='active')return;try{const status=await niaOverlayStatus();if(active){setOverlayStatus(status);if(status==='hidden'||status.startsWith('error'))setOverlayRequested(false);}}catch(error){if(active){setOverlayStatus(String(error));setOverlayRequested(false);}}};
+  const timer=setInterval(()=>{void update()},1000);
+  return()=>{active=false;clearInterval(timer)};
+ },[overlayRequested]);
+ useEffect(()=>()=>{voiceGeneration.current++;voiceAbort.current?.abort();alignedPlayer.current?.stop();alignedPlayer.current=null;void Speech.stop();void clearNiaOverlaySpeech().catch(()=>{});},[]);
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
    if(state!=='active'){
+    void clearNiaOverlaySpeech().catch(()=>{});
+    voiceGeneration.current++;voiceAbort.current?.abort();
     speechVersion.current++;setCameraVisible(false);
-    if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{});operation.current=false;}
+    if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{}).finally(()=>{operation.current=false;recordingConnection.current=null;});}
     alignedPlayer.current?.stop();alignedPlayer.current=null;
     void Speech.stop();
     setAvatarSpeaking(false);setAudioPositionMs(null);
@@ -71,16 +92,16 @@ export default function Home(){
   let active=true;
   (async()=>{
    try{
-    const [entries,apiToken,accessToken,enabled]=await Promise.all([
-     AsyncStorage.multiGet(['nia_endpoint','nia_model','nia_flirty','nia_memory_notes','nia_assistant_mode','nia_gateway_url','nia_gateway_enabled']),
-     SecureStore.getItemAsync('nia_api_token'),SecureStore.getItemAsync('nia_gateway_token'),checkInsEnabled()
+    const [entries,apiToken,accessToken,enabled,savedNotes]=await Promise.all([
+     AsyncStorage.multiGet(['nia_endpoint','nia_model','nia_flirty','nia_assistant_mode','nia_gateway_url','nia_gateway_enabled']),
+     SecureStore.getItemAsync('nia_api_token'),SecureStore.getItemAsync('nia_gateway_token'),checkInsEnabled(),loadMemoryNotes()
     ]);
     if(!active)return;
     const values=Object.fromEntries(entries);
     setMessages(await loadConversation());
     setEndpoint(values.nia_endpoint||'');setModel(values.nia_model||'llama-3.3-70b-versatile');
     setFlirty(values.nia_flirty!=='false');
-    const notes=values.nia_memory_notes||'';setMemoryNotes(notes);setMemoryDraft(notes);
+    setMemoryNotes(savedNotes);setMemoryDraft(savedNotes);
     const mode=values.nia_assistant_mode;
     if(mode==='research'||mode==='business'||mode==='companion')setAssistantMode(mode);
     setGatewayUrl(values.nia_gateway_url||'');setUseGateway(values.nia_gateway_enabled==='true');
@@ -120,13 +141,15 @@ export default function Home(){
     const subscription=player.addListener('playbackStatusUpdate',status=>{
      if(closed||version!==speechVersion.current)return;
      if(status.didJustFinish){done();return;}
-     if(status.playing&&status.isLoaded&&Number.isFinite(status.currentTime))
+     const playing=status.playing&&status.isLoaded&&!status.isBuffering;
+     setAvatarSpeaking(playing);
+     if(playing&&Number.isFinite(status.currentTime))
       setAudioPositionMs(Math.max(0,Math.round(status.currentTime*1000)));
     });
     alignedPlayer.current={stop:()=>{
      if(closed)return;closed=true;subscription.remove();player.pause();player.remove();
     }};
-    setAudioPositionMs(0);setVisemeCues(aligned.cues);setAvatarSpeaking(true);
+    setAudioPositionMs(0);setVisemeCues(aligned.cues);setAvatarSpeaking(false);
     player.play();return;
    }catch(error){
     if(version!==speechVersion.current)return;
@@ -179,29 +202,37 @@ export default function Home(){
  async function toggleVoice(){
   if(voiceBusy||!loaded)return;
   if(!recordingRef.current&&operation.current)return;
-  if(useGateway&&!recordingRef.current){Alert.alert('Voice connection','Voice transcription currently requires the direct Groq-compatible connection. Gateway voice is not implemented.');return;}
   operation.current=true;setVoiceBusy(true);
+  const generation=++voiceGeneration.current;
   try{
    if(recordingRef.current){
     recordingRef.current=false;setRecording(false);await recorder.stop();
     await setAudioModeAsync({allowsRecording:false});
     if(!recorder.uri)throw new Error('No recording was saved.');
-    const transcript=await transcribeAudio(recorder.uri,endpoint,token);setDraft(transcript);
+    const connection=recordingConnection.current;
+    if(!connection)throw new Error('Recording connection was lost. Record again.');
+    const version=historyVersion.current;
+    voiceAbort.current=new AbortController();
+    if(generation!==voiceGeneration.current||AppState.currentState!=='active')return;
+    const transcript=await transcribeRecording(recorder.uri,connection,voiceAbort.current.signal);
+    if(version===historyVersion.current&&generation===voiceGeneration.current)
+     setDraft(current=>current.trim()?current.trim()+'\n'+transcript:transcript);
    }else{
-    secureUrl(endpoint);
-    if(!token.trim())throw new Error('Save your AI connection token first.');
+    recordingConnection.current=validateRecordingConnection(useGateway?
+     {gateway:true,endpoint:gatewayUrl,token:gatewayToken}:{gateway:false,endpoint,token});
     const permission=await requestRecordingPermissionsAsync();
+    if(generation!==voiceGeneration.current)return;
     if(!permission.granted)throw new Error('Microphone permission was not granted.');
     speechVersion.current++;alignedPlayer.current?.stop();alignedPlayer.current=null;await Speech.stop();setAvatarSpeaking(false);setAudioPositionMs(null);
     await setAudioModeAsync({allowsRecording:true,playsInSilentMode:true});
     if(AppState.currentState!=='active')throw new Error('Return to Nia before recording.');
     await recorder.prepareToRecordAsync();
-    if(AppState.currentState!=='active')throw new Error('Recording was cancelled while Nia was backgrounded.');
+    if(generation!==voiceGeneration.current||AppState.currentState!=='active')throw new Error('Recording was cancelled while Nia was backgrounded.');
     recorder.record();
     recordingRef.current=true;setRecording(true);operation.current=true;
    }
-  }catch(error){recordingRef.current=false;setRecording(false);await recorder.stop().catch(()=>{});await setAudioModeAsync({allowsRecording:false}).catch(()=>{});Alert.alert('Voice unavailable',String(error));}
-  finally{setVoiceBusy(false);if(!recordingRef.current)operation.current=false;}
+  }catch(error){recordingRef.current=false;setRecording(false);await recorder.stop().catch(()=>{});await setAudioModeAsync({allowsRecording:false}).catch(()=>{});if(generation===voiceGeneration.current)Alert.alert('Voice unavailable',String(error));}
+  finally{voiceAbort.current=null;setVoiceBusy(false);if(!recordingRef.current){operation.current=false;recordingConnection.current=null;}}
  }
  async function lookAtScene(){
   if(operation.current||voiceBusy||!loaded)return;
@@ -234,10 +265,12 @@ export default function Home(){
   finally{operation.current=false;setVisionBusy(false);}
  }
  async function saveMemoryNotes(){
+  try{
   const notes=memoryDraft.trim().slice(0,2000);
-  await AsyncStorage.setItem('nia_memory_notes',notes);
+  await persistMemoryNotes(notes);
   setMemoryNotes(notes);
-  Alert.alert('Memory updated','Your notes are stored on this device and used as context in future conversations.');
+  Alert.alert('Memory updated','Your notes are stored securely on this device and used as context in future conversations.');
+  }catch(error){Alert.alert('Memory not saved',String(error));}
  }
  async function shareHistory(){
   if(!messages.length){Alert.alert('No messages yet','Start a conversation before exporting.');return;}
@@ -254,6 +287,13 @@ export default function Home(){
  return <SafeAreaView style={s.screen} edges={['top','bottom']}><ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
   <Text style={s.title}>Nia</Text>
   <Avatar3D speaking={avatarSpeaking} visemes={visemeCues} playbackMs={audioPositionMs}/>
+  <Pressable style={s.secondary} onPress={async()=>{try{
+   const result=await showNiaOverlay();
+   if(result==='permission-required'){Alert.alert('Floating Nia permission','Allow display over other apps, return to Nia, then tap Show floating Nia.');return;}
+   setOverlayStatus('loading');setOverlayRequested(true);
+  }catch(error){Alert.alert('Floating Nia unavailable',String(error));}}}><Text style={s.white}>Show floating Nia</Text></Pressable>
+  <Pressable style={s.secondary} onPress={async()=>{try{await hideNiaOverlay();setOverlayStatus('hidden');setOverlayRequested(false);}catch(error){Alert.alert('Floating Nia unavailable',String(error));}}}><Text style={s.white}>Hide floating Nia</Text></Pressable>
+  <Text style={s.note}>Floating Nia: {overlayStatus}</Text>
   <Pressable style={s.secondary} onPress={async()=>{const next=!flirty;setFlirty(next);await AsyncStorage.setItem('nia_flirty',String(next));}}><Text style={s.white}>Flirtatious personality: {flirty?'On':'Off'}</Text></Pressable>
   <Pressable style={s.secondary} onPress={async()=>{if(cameraVisible){setCameraVisible(false);return;}const permission=cameraPermission?.granted?cameraPermission:await requestCameraPermission();if(permission.granted){setCameraVisible(true);}else{Alert.alert('Camera permission needed','Allow camera access to show a live preview while Nia is open.');}}}><Text style={s.white}>{cameraVisible?'Stop camera preview':'Enable front camera (while app is open)'}</Text></Pressable>
   {cameraVisible?<View><CameraView ref={cameraRef} style={{height:220,borderRadius:12,overflow:'hidden'}} facing="front" active={cameraVisible}/><Text style={s.note}>Live camera preview only. Use the photo button to share a single image with Nia for AI interpretation. Camera stops when preview closes; no background recording.</Text></View>:null}
@@ -280,7 +320,7 @@ export default function Home(){
     <Text style={s.note}>Memory notes — only information you choose to save</Text>
     <TextInput value={memoryDraft} onChangeText={setMemoryDraft} multiline style={s.input} placeholder="Preferences or details for Nia to remember" placeholderTextColor="#bbb"/>
     <Pressable onPress={saveMemoryNotes} style={s.secondary}><Text style={s.white}>Save memory notes</Text></Pressable>
-    <Pressable onPress={async()=>{await AsyncStorage.removeItem('nia_memory_notes');setMemoryNotes('');setMemoryDraft('');}} style={s.secondary}><Text style={s.white}>Erase memory notes</Text></Pressable>
+    <Pressable onPress={async()=>{try{await deleteMemoryNotes();setMemoryNotes('');setMemoryDraft('');}catch(error){Alert.alert('Memory not erased',String(error));}}} style={s.secondary}><Text style={s.white}>Erase memory notes</Text></Pressable>
     <Pressable disabled={busy||visionBusy} onPress={clearHistory} style={s.secondary}><Text style={s.white}>Delete conversation history</Text></Pressable>
    </View>:null}
   <Pressable onPress={callCapabilityNotice} style={s.secondary}><Text style={s.white}>Telephone assistant — dialer only</Text></Pressable>

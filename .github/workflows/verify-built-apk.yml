@@ -1,0 +1,49 @@
+name: Recheck compiled Nia floating APK
+# Historical checksum-pinned v0.1.11 retest. New application versions use the
+# full Android build/emulator workflow; this guard intentionally rejects them.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  overlay-recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require unchanged application source from compiled APK
+        run: |
+          git diff --exit-code 379b230079e36c5f9f2ff7d7981803970021596c HEAD -- app src assets native-overlay plugins app.json package.json package-lock.json metro.config.js tsconfig.json
+      - name: Check emulator assertion regressions
+        run: node --test tests/android-emulator.test.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          name: nia-standalone-test-apk
+          run-id: 42357710955
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: nia-build
+      - name: Verify exact previously compiled APK
+        run: |
+          echo '3d5bb9b062b7d819311f5e481265dd8b3d4a834b0b16c99d64fde5d9bdab6634  nia-build/app-release.apk' | sha256sum -c -
+      - name: Enable emulator acceleration
+        run: sudo chown "$USER" /dev/kvm
+      - name: Install and verify unchanged APK including floating overlay
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash scripts/android-emulator-smoke.sh
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nia-overlay-recheck-diagnostics
+          path: artifacts/android-smoke/
+          if-no-files-found: ignore

@@ -1,6 +1,7 @@
 import http from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {idToViseme,timingToCues} from './speechTiming.mjs';
+import {transcribeUpload,TranscriptionError,readRecording} from './transcription.mjs';
 
 const PORT=Number(process.env.PORT||8080);
 const ACCESS=process.env.NIA_GATEWAY_TOKEN||'';
@@ -52,17 +53,23 @@ async function synthesize(text){
   return {audio,cues:timingToCues(events,durationMs)};
  }finally{synth.close();}
 }
-async function chat(data){
- if(!GROQ_KEY)throw Error('GROQ_API_KEY missing');
+export function buildChatPayload(data){
  const messages=data.messages;
  if(!Array.isArray(messages)||messages.length<1||messages.length>42||
    messages.some(m=>!m||!['user','assistant'].includes(m.role)||typeof m.content!=='string'||m.content.length>12000))
    throw Error('Invalid conversation');
  const mode=['companion','business','research'].includes(data.mode)?data.mode:'companion';
+ const style=data.flirty===true&&mode==='companion'?
+  'Light consensual flirting is welcome; stop if asked.':
+  'Keep a friendly, non-flirtatious tone.';
+ return {model:process.env.GROQ_MODEL||'llama-3.3-70b-versatile',stream:false,
+  messages:[{role:'system',content:'You are Nia, a truthful, caring AI companion. Mode: '+mode+'. Remain respectful and do not pretend to be human. '+style},...messages]};
+}
+async function chat(data){
+ if(!GROQ_KEY)throw Error('GROQ_API_KEY missing');
  const answer=await fetch('https://api.groq.com/openai/v1/chat/completions',{
   method:'POST',headers:{Authorization:'Bearer '+GROQ_KEY,'Content-Type':'application/json'},
-  body:JSON.stringify({model:process.env.GROQ_MODEL||'llama-3.3-70b-versatile',stream:false,
-   messages:[{role:'system',content:'You are Nia, a truthful, caring AI companion. Mode: '+mode+'. Remain respectful and do not pretend to be human.'},...messages]})
+  body:JSON.stringify(buildChatPayload(data))
   ,signal:AbortSignal.timeout(27000)
  });
  if(!answer.ok)throw Error('Groq HTTP '+answer.status);
@@ -78,10 +85,23 @@ const server=http.createServer(async(req,res)=>{
   // uses /health to decide whether the gateway is usable.
   const chatReady=Boolean(ACCESS&&GROQ_KEY);
   return json(res,chatReady?200:503,{status:chatReady?'ok':'not_configured',service:'nia-api',
-    voice_ready:Boolean(AZURE_KEY&&AZURE_REGION),chat_ready:Boolean(GROQ_KEY)});
+    voice_ready:Boolean(AZURE_KEY&&AZURE_REGION),transcription_ready:Boolean(ACCESS&&GROQ_KEY),chat_ready:Boolean(GROQ_KEY)});
  }
  if(!allowed(req))return json(res,401,{error:'Unauthorized'});
  try{
+  if(path==='/v1/transcribe'&&req.method==='POST'){
+   if(!GROQ_KEY)return json(res,503,{error:'Voice provider not configured'});
+   const controller=new AbortController();
+   const cancel=()=>{if(!res.writableEnded)controller.abort();};
+   res.once('close',cancel);
+   try{
+    const bytes=await readRecording(req);
+    const result=await transcribeUpload(req.headers['content-type'],bytes,GROQ_KEY,fetch,controller.signal);
+    return json(res,200,result);
+   }finally{
+    res.off('close',cancel);
+   }
+  }
   if(path==='/v1/chat'&&req.method==='POST'){
    if(!GROQ_KEY)return json(res,503,{error:'Chat provider not configured'});
    return json(res,200,await chat(await body(req)));
@@ -106,6 +126,10 @@ const server=http.createServer(async(req,res)=>{
   }
   return json(res,404,{error:'Not found'});
  }catch(err){
+  if(err instanceof TranscriptionError){
+   if(err.status===413||err.status===408)res.setHeader('Connection','close');
+   return json(res,err.status,{error:err.message});
+  }
   console.error('Nia gateway request failed:',err instanceof Error?err.name:'Error');
   return json(res,500,{error:'Nia speech or chat provider failed'});
  }

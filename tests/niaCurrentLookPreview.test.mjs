@@ -34,6 +34,6 @@ test('appearance preview does not claim final likeness or add unapproved clothin
 });
 test('Android test app version increments without clearing release gate',()=>{
  const version=JSON.parse(readFileSync('app.json','utf8')).expo;
- assert.equal(version.version,'0.1.9');assert.equal(version.android.versionCode,10);
+ assert.match(version.version,/^0\.1\.\d+$/);assert.ok(version.android.versionCode>=11);
  assert.match(readFileSync('docs/PRODUCTION_RELEASE.md','utf8'),/Current status: BLOCKED/);
 });
