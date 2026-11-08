@@ -106,7 +106,8 @@ export default function Avatar3D({speaking:externalSpeaking=false,visemes=EMPTY_
   <Pressable onPress={chooseRig} style={s.btn}><Text style={s.txt}>Import 3D GLB — animated rig or static appearance</Text></Pressable>
   {modelUri?<Pressable onPress={()=>{loadGeneration.current++;controller.current?.dispose();controller.current=null;setModelUri(null);setStaticPreview(false);setLoadedName('Nia test rig — appearance not approved');setDiagnostics('Loading bundled model…');setError('');}} style={s.btn}><Text style={s.txt}>Restore bundled model</Text></Pressable>:null}
   <Text style={s.caption}>Model: {loadedName}</Text>
-  <Pressable disabled={staticPreview} onPress={()=>setAutonomous(v=>!v)} style={[s.btn,staticPreview&&s.disabled]}><Text style={s.txt}>Autonomous movement: {staticPreview?'Unavailable — static model':autonomous?'On':'Off'}</Text></Pressable>
+  <Pressable disabled={staticPreview} onPress={()=>setAutonomous(v=>!v)} style={[s.btn,staticPreview&&s.disabled]}><Text style={s.txt}>Automatic motion selection: {staticPreview?'Unavailable — static model':autonomous?'On':'Off'}</Text></Pressable>
+  {!staticPreview&&!autonomous?<Text style={s.caption}>Manual {motion} animation continues. Choose Idle for a resting pose.</Text>:null}
   <Text selectable style={s.caption}>Diagnostics: {diagnostics}</Text>
   {error?<Text style={s.error}>Model loading failed: {error}</Text>:null}
   <View style={s.row}>{(['Idle','Walk','Dance','Wave'] as Motion[]).map(v=>

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,existsSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,existsSync,rmSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
 import {tmpdir} from 'node:os';
 import {join,resolve,dirname} from 'node:path';
 import {createRequire} from 'node:module';
@@ -13,8 +14,8 @@ test('native overlay packages a closed, offline module graph and the exact bundl
  const directory=mkdtempSync(join(tmpdir(),'nia-overlay-'));
  try{
   const files=packageOverlayAssets(process.cwd(),directory);
-  assert.equal(files.length,6);
-  for(const name of ['renderer.js','GLTFLoader.js','BufferGeometryUtils.js','three.module.js']){
+  assert.equal(files.length,7);
+  for(const name of ['renderer.js','GLTFLoader.js','BufferGeometryUtils.js','three.module.js','continuousBody.js']){
    const code=readFileSync(join(directory,name),'utf8');
    const parsed=ts.createSourceFile(name,code,ts.ScriptTarget.Latest,true,ts.ScriptKind.JS);
    for(const node of parsed.statements){
@@ -35,6 +36,23 @@ test('native overlay packages a closed, offline module graph and the exact bundl
   assert.match(renderer,/renderer\.info\.render\.calls<1/);
   assert.match(renderer,/NIA_OVERLAY_READY/);
   assert.match(renderer,/new GLTFLoader\(\)\.parseAsync/);
+ }finally{rmSync(directory,{recursive:true,force:true});}
+});
+
+test('floating renderer packages and executes the same body repair as the main view',async()=>{
+ const directory=mkdtempSync(join(tmpdir(),'nia-overlay-body-'));
+ try{
+  packageOverlayAssets(process.cwd(),directory);
+  writeFileSync(join(directory,'package.json'),'{"type":"module"}');
+  const {GLTFLoader}=await import(pathToFileURL(join(directory,'GLTFLoader.js')).href);
+  const {applyContinuousNiaBody}=await import(pathToFileURL(join(directory,'continuousBody.js')).href);
+  const bytes=readFileSync(join(directory,'nia-character.glb'));
+  const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+  const result=applyContinuousNiaBody(gltf.scene);
+  assert.equal(result.applied,true);
+  assert.ok(gltf.scene.getObjectByName('Nia continuous Right shirt sleeve')?.isSkinnedMesh);
+  const renderer=readFileSync(join(directory,'renderer.js'),'utf8');
+  assert.match(renderer,/applyContinuousNiaBody\(model.scene\)/);
  }finally{rmSync(directory,{recursive:true,force:true});}
 });
 

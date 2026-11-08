@@ -132,3 +132,27 @@ test('overlay proof requires fresh post-Show renderer readiness and captures sur
  assert.match(script,/overlay-home-windows.txt" close/);
  assert.match(script,/overlay-closed-windows.txt" closed/);
 });
+test('pose evidence selects the requested motion, restores the canvas, waits and then captures',()=>{
+ const script=read('scripts/android-emulator-smoke.sh');
+ const body=script.match(/capture_motion_pose\(\) \{\n([\s\S]*?)\n\}/)[1];
+ const harness=`set -euo pipefail
+OUT=pose-evidence
+tap_label(){ echo "TAP $*"; }
+scroll_main_top(){ echo TOP; }
+sleep(){ echo "WAIT $*"; }
+fresh_overlay_ui(){ echo "UI $*"; }
+capture(){ echo "CAPTURE $*"; }
+capture_motion_pose(){
+${body}
+}
+capture_motion_pose Wave wave-pose
+capture_motion_pose Idle idle-pose
+`;
+ const result=spawnSync('bash',['-c',harness],{encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);
+ assert.deepEqual(result.stdout.trim().split('\n'),[
+  'TAP Wave true','TOP','WAIT 2','UI pose-evidence/wave-pose-ui.xml','CAPTURE wave-pose',
+  'TAP Idle true','TOP','WAIT 2','UI pose-evidence/idle-pose-ui.xml','CAPTURE idle-pose',
+ ]);
+ assert.ok(script.indexOf('capture_motion_pose Wave wave-pose')<script.indexOf('adb shell appops set'));
+});

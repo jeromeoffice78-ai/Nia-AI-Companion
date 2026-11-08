@@ -1,5 +1,6 @@
 import * as THREE from './three.module.js';
 import {GLTFLoader} from './GLTFLoader.js';
+import {applyContinuousNiaBody} from './continuousBody.js';
 
 // Scalar states come from the native bridge using the audio player's measured
 // currentTime and validated aligned cues. This renderer never derives phonemes
@@ -133,6 +134,7 @@ async function main(){
  if([...(json.buffers||[]),...(json.images||[])].some(item=>item.uri))throw Error('Overlay GLB must have self-contained resources');
  model=await new GLTFLoader().parseAsync(bytes,'');
  if(disposed)return;
+ applyContinuousNiaBody(model.scene);
  scene.add(model.scene);mixer=new THREE.AnimationMixer(model.scene);
  speechController=createOverlaySpeechController(model.scene);speechController.setSpeechState(pendingSpeechState);
  const box=new THREE.Box3().setFromObject(model.scene),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());

@@ -49,7 +49,7 @@ public class NiaOverlayService extends Service {
  private static final Set<String> VISEMES=new HashSet<>(Arrays.asList("sil","PP","FF","TH","DD","kk","CH","SS","nn","RR","aa","E","ih","oh","ou"));
  private static final String CHANNEL="nia-floating-avatar",STOP="com.nia.companion.STOP_OVERLAY";
  private static final int NOTICE=7521;
- private static final Set<String> ASSETS=new HashSet<>(Arrays.asList("index.html","renderer.js","three.module.js","GLTFLoader.js","BufferGeometryUtils.js","nia-character.glb"));
+ private static final Set<String> ASSETS=new HashSet<>(Arrays.asList("index.html","renderer.js","three.module.js","GLTFLoader.js","BufferGeometryUtils.js","continuousBody.js","nia-character.glb"));
  private WindowManager manager;
  private WindowManager.LayoutParams params;
  private LinearLayout floating;

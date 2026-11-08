@@ -74,6 +74,68 @@ function makeGeometry(profile:ReadonlyArray<P>,keys:ReadonlyArray<Key>,jointInde
  geometry.setIndex(indices);geometry.computeVertexNormals();geometry.computeBoundingSphere();
  return geometry;
 }
+/** Cut a 6 by 6 torso patch and stitch the sleeve to its 24-vertex perimeter.
+ * Identical bind positions AND skin weights are essential: overlapping surfaces
+ * with different weights separate as soon as the upper arm rotates.
+ */
+function attachSleeve(torso:THREE.BufferGeometry,sleeve:THREE.BufferGeometry,sign:number){
+ const sides=24,low=23,high=29,center=sign===1?0:12,left=center-3,right=center+3;
+ const vertex=(ring:number,side:number)=>ring*sides+(side+sides)%sides;
+ const boundary:number[]=[];
+ for(let side=left;side<right;side++)boundary.push(vertex(low,side));
+ for(let ring=low;ring<high;ring++)boundary.push(vertex(ring,right));
+ for(let side=right;side>left;side--)boundary.push(vertex(high,side));
+ for(let ring=high;ring>low;ring--)boundary.push(vertex(ring,left));
+ // Choose winding and phase by minimizing distance to the natural sleeve ring.
+ const tp=torso.getAttribute('position'),sp=sleeve.getAttribute('position');
+ let best:number[]=[],error=Infinity;
+ for(const direction of [1,-1])for(let phase=0;phase<sides;phase++){
+  const order=boundary.map((_,i)=>boundary[(phase+direction*i+sides*2)%sides]);
+  const cost=order.reduce((sum,v,i)=>sum+new THREE.Vector3().fromBufferAttribute(tp,v)
+   .distanceToSquared(new THREE.Vector3().fromBufferAttribute(sp,i)),0);
+  if(cost<error){error=cost;best=order;}
+ }
+ // Taper the graft into the sleeve over its proximal third, retaining original
+ // distal geometry and elbow skinning. Boundary weights exactly copy the torso.
+ const originalRoots=Array.from({length:sides},(_,i)=>new THREE.Vector3().fromBufferAttribute(sp,i));
+ for(let ring=0;ring<12;ring++){
+  const blend=1-smooth(ring/12);
+  for(let side=0;side<sides;side++){
+   const dst=ring*sides+side,src=best[side];
+   const root=new THREE.Vector3().fromBufferAttribute(tp,src);
+   const originalRoot=originalRoots[side];
+   // Cache original root before modifying it below.
+   const delta=root.sub(originalRoot);
+   const point=new THREE.Vector3().fromBufferAttribute(sp,dst).addScaledVector(delta,blend);
+   sp.setXYZ(dst,point.x,point.y,point.z);
+   const weights=new Map<number,number>();
+   for(const [geometry,index,factor] of [[torso,src,blend],[sleeve,dst,1-blend]] as const){
+    const si=geometry.getAttribute('skinIndex'),sw=geometry.getAttribute('skinWeight');
+    for(let k=0;k<4;k++)weights.set(si.getComponent(index,k),(weights.get(si.getComponent(index,k))||0)+sw.getComponent(index,k)*factor);
+   }
+   const sorted=[...weights].filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).slice(0,4);
+   const total=sorted.reduce((n,x)=>n+x[1],0);
+   for(let k=0;k<4;k++){
+    sleeve.getAttribute('skinIndex').setComponent(dst,k,sorted[k]?.[0]??0);
+    sleeve.getAttribute('skinWeight').setComponent(dst,k,(sorted[k]?.[1]??0)/total);
+   }
+  }
+ }
+ const index=torso.getIndex()!,remaining:number[]=[];
+ for(let i=0;i<index.count;i+=3){
+  const triangle=[index.getX(i),index.getX(i+1),index.getX(i+2)];
+  const inside=triangle.every(v=>{
+   const ring=Math.floor(v/sides),side=v%sides;
+   const relative=(side-center+sides+12)%sides-12;
+   return ring>=low&&ring<=high&&relative>=-3&&relative<=3;
+  });
+  if(!inside)remaining.push(...triangle);
+ }
+ torso.setIndex(remaining);
+ torso.userData.shoulderBoundaries={...torso.userData.shoulderBoundaries,[sign]:best};
+ sleeve.userData.shoulderBoundary=best;
+ for(const geometry of [torso,sleeve]){geometry.computeVertexNormals();geometry.computeBoundingSphere();}
+}
 export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
  // GLTFLoader sanitizes spaces in node names, so match using a stable key.
  const normalized=(name:string)=>name.toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -101,9 +163,9 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
   mesh.name='Nia continuous '+name;
   mesh.bind(skin,old.bindMatrix.clone());
   mesh.bindMode=old.bindMode;mesh.bindMatrixInverse.copy(old.bindMatrixInverse);
-  generated.push(mesh);
+  generated.push(mesh);return mesh;
  };
- add('fitted torso',torso,'shirt',[
+ const shirt=add('fitted torso',torso,'shirt',[
   K(0,[['Hips',.65],['Spine',.35]]),K(.26,[['Spine',.85],['Chest',.15]]),
   K(.62,[['Chest',.9],['UpperChest',.1]]),K(1,[['UpperChest',1]])]);
  add('hips and shorts',hips,'shorts',[
@@ -126,8 +188,9 @@ export function applyContinuousNiaBody(model:THREE.Object3D):Refinement{
    K(.56,[[side+'UpperArm',.36],[side+'LowerArm',.64]]),
    K(.82,[[side+'LowerArm',.94],[side+'Hand',.06]]),
    K(1,[[side+'LowerArm',.38],[side+'Hand',.62]])]);
-  add(side+' shirt sleeve',sleeve,'shirt',[
+  const shirtSleeve=add(side+' shirt sleeve',sleeve,'shirt',[
    K(0,[['UpperChest',.6],[side+'UpperArm',.4]]),K(1,[[side+'UpperArm',1]])]);
+  attachSleeve(shirt.geometry,shirtSleeve.geometry,sign);
   add(side+' skin leg',leg,'skin',[
    K(0,[[side+'UpperLeg',1]]),K(.33,[[side+'UpperLeg',.94],[side+'LowerLeg',.06]]),
    K(.55,[[side+'UpperLeg',.32],[side+'LowerLeg',.68]]),

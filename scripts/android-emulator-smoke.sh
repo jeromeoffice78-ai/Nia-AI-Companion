@@ -162,6 +162,35 @@ tap_label() {
   return 1
 }
 
+scroll_main_top() {
+  local sw sh coords title_x title_y i
+  read -r sw sh < <(adb shell wm size | python3 -c 'import re,sys; values=re.findall(r"(\d+)x(\d+)",sys.stdin.read()); print(*values[-1])')
+  for i in $(seq 1 8); do
+    fresh_overlay_ui "$OUT/motion-scroll-ui.xml"
+    coords="$(uia_query "$OUT/motion-scroll-ui.xml" tap Nia || true)"
+    if [ -n "$coords" ]; then
+      read -r title_x title_y <<<"$coords"
+      # The app title near the display top establishes that the half-screen
+      # model canvas is back in view, rather than capturing only lower controls.
+      if [ "$title_y" -lt "$((sh/4))" ]; then return 0; fi
+    fi
+    adb shell input swipe "$((sw/2))" "$((sh/3))" "$((sw/2))" "$((sh*3/4))" 350
+    sleep 1
+  done
+  capture motion-scroll-failed
+  echo "::error::Could not return Nia's model canvas to the top for pose screenshots"
+  return 1
+}
+
+capture_motion_pose() {
+  local motion="$1" phase="$2"
+  tap_label "$motion" true
+  scroll_main_top
+  sleep 2
+  fresh_overlay_ui "$OUT/$phase-ui.xml"
+  capture "$phase"
+}
+
 # Nonfocusable system overlays are absent from UIAutomator's active-window XML.
 # Read WindowManager for their actual surface, frame and foreground-app evidence.
 overlay_window() {
@@ -246,6 +275,11 @@ verify_overlay() {
   echo "::error::Floating Nia lacked fresh render readiness and a visible application-overlay surface during $phase"
   return 1
 }
+
+# Capture actual manually selected poses with the whole main canvas visible.
+# These images are review evidence, not automated approval of mesh quality.
+capture_motion_pose Wave wave-pose
+capture_motion_pose Idle idle-pose
 
 # Grant only the overlay app-op under test; no microphone/camera permissions.
 adb shell appops set "$APP" SYSTEM_ALERT_WINDOW allow
