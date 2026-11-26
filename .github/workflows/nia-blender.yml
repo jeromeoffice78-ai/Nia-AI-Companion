@@ -17,6 +17,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y blender python3-numpy
           blender --version | head -1
+      - name: Normalize legacy GLB accessor bounds
+        run: python3 scripts/normalize_nia_glb.py assets/nia-character-animated.glb dist/Nia-blender-compatible.glb
       - name: Build editable Nia scene
         run: blender -b --python scripts/build_nia_blender.py
       - name: Verify deliverables

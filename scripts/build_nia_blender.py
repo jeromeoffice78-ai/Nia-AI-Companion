@@ -6,7 +6,7 @@ import bpy
 import json
 from pathlib import Path
 
-rig=Path('assets/nia-character-animated.glb').resolve()
+rig=Path('dist/Nia-blender-compatible.glb').resolve()
 out=Path('dist/Nia-Engineering-Rig.blend').resolve()
 report=Path('dist/Nia-Blender-Inspection.json').resolve()
 out.parent.mkdir(parents=True,exist_ok=True)
