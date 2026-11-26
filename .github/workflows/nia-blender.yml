@@ -1,0 +1,40 @@
+name: Build Nia Blender Engineering Scene
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/build_nia_blender.py'
+      - '.github/workflows/nia-blender.yml'
+      - 'assets/nia-character-animated.glb'
+jobs:
+  blender-scene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y blender
+          blender --version | head -1
+      - name: Build editable Nia scene
+        run: blender -b --python scripts/build_nia_blender.py
+      - name: Verify deliverables
+        run: |
+          test -s dist/Nia-Engineering-Rig.blend
+          test -s dist/Nia-Blender-Inspection.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('dist/Nia-Blender-Inspection.json'))
+          assert max(data['bone_counts'])>=20
+          assert data['production_approved'] is False
+          assert data['reference_photo_included'] is False
+          print(data)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nia-Blender-Editable-Engineering-Project
+          path: |
+            dist/Nia-Engineering-Rig.blend
+            dist/Nia-Blender-Inspection.json
+          retention-days: 14
