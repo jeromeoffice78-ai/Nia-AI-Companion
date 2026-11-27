@@ -23,6 +23,8 @@ export default function Home(){
  const recordingRef=useRef(false);
  const [recording,setRecording]=useState(false);
  const [voiceBusy,setVoiceBusy]=useState(false);
+ const [voiceReply,setVoiceReply]=useState(false);
+ const voiceSession=useRef(0);
  const [messages,setMessages]=useState<Message[]>([]);
  const [draft,setDraft]=useState('');
  const [endpoint,setEndpoint]=useState('');
@@ -57,7 +59,7 @@ export default function Home(){
  useEffect(()=>{
   const subscription=AppState.addEventListener('change',state=>{
    if(state!=='active'){
-    speechVersion.current++;setCameraVisible(false);
+    speechVersion.current++;voiceSession.current++;setCameraVisible(false);
     if(recordingRef.current){recordingRef.current=false;setRecording(false);void recorder.stop().then(()=>setAudioModeAsync({allowsRecording:false})).catch(()=>{});operation.current=false;}
     alignedPlayer.current?.stop();alignedPlayer.current=null;
     void Speech.stop();
@@ -140,8 +142,8 @@ export default function Home(){
   setVisemeCues([]);setAudioPositionMs(null);setAvatarSpeaking(true);
   try{Speech.speak(answer,{language:'en-US',onDone:done,onStopped:done,onError:done});}catch{done();}
  }
- async function send(){
-  const content=draft.trim();if(!content||operation.current||!loaded)return;
+ async function send(voiceText?:string){
+  const content=(voiceText??draft).trim();if(!content||operation.current||!loaded)return;
   if(content.length>12000){Alert.alert('Message too long','Use up to 12,000 characters per message.');return;}
   operation.current=true;setBusy(true);
   const version=historyVersion.current;
@@ -186,7 +188,16 @@ export default function Home(){
     recordingRef.current=false;setRecording(false);await recorder.stop();
     await setAudioModeAsync({allowsRecording:false});
     if(!recorder.uri)throw new Error('No recording was saved.');
-    const transcript=await transcribeAudio(recorder.uri,endpoint,token);setDraft(transcript);
+    const session=voiceSession.current;
+    const transcript=await transcribeAudio(recorder.uri,endpoint,token);
+    const active=session===voiceSession.current&&AppState.currentState==='active';
+    const combined=draft.trim()?draft.trim()+'\n'+transcript:transcript;
+    setDraft(combined);
+    // Explicitly enabled per app session. Never automatically submit an existing typed draft.
+    if(voiceReply&&active&&!draft.trim()){
+     operation.current=false;
+     await send(transcript);
+    }
    }else{
     secureUrl(endpoint);
     if(!token.trim())throw new Error('Save your AI connection token first.');
@@ -290,9 +301,10 @@ export default function Home(){
   <Pressable onPress={shareHistory} style={s.secondary}><Text style={s.white}>Export conversation</Text></Pressable>
   <View style={s.history}>{messages.map((m,i)=><Text key={i} style={s.msg}>{m.role==='user'?'You':'Nia'}: {m.content}</Text>)}</View>
   <Pressable style={s.secondary} disabled={voiceBusy||busy||visionBusy||!loaded} onPress={toggleVoice}><Text style={s.white}>{recording?'Stop recording and transcribe':voiceBusy?'Processing voice…':'Record voice message'}</Text></Pressable>
-  <Text style={s.note}>Recorded speech becomes a draft for you to review and send.</Text>
-  <TextInput style={s.input} value={draft} onChangeText={setDraft} placeholder="Message Nia" placeholderTextColor="#bbb" multiline/>
-  <Pressable disabled={busy||visionBusy||voiceBusy||recording||!loaded} style={s.button} onPress={send}><Text style={s.white}>{busy?'Thinking…':'Send'}</Text></Pressable>
+  <Pressable style={s.secondary} disabled={recording||voiceBusy||busy||visionBusy||useGateway||!loaded} onPress={()=>setVoiceReply(v=>!v)}><Text style={s.white}>Speak and reply: {voiceReply?'On':'Off'}</Text></Pressable>
+  <Text style={s.note}>{voiceReply&&!useGateway?'With speak and reply enabled, stopping a recording sends the transcript automatically when no typed draft exists. Audio is sent to your configured speech provider. Spoken replies follow your speech setting. This is turn-based, not continuous listening.':'Recorded speech becomes a draft for you to review and send.'}</Text>
+  <TextInput style={s.input} value={draft} onChangeText={setDraft} editable={!recording&&!voiceBusy&&!busy&&!visionBusy} placeholder="Message Nia" placeholderTextColor="#bbb" multiline/>
+  <Pressable disabled={busy||visionBusy||voiceBusy||recording||!loaded} style={s.button} onPress={()=>void send()}><Text style={s.white}>{busy?'Thinking…':'Send'}</Text></Pressable>
  </ScrollView></SafeAreaView>;
 }
 const s=StyleSheet.create({screen:{flex:1,backgroundColor:'#201724'},screenContent:{paddingTop:16,paddingHorizontal:20,paddingBottom:28,flexGrow:1},title:{fontSize:32,color:'#fff',fontWeight:'bold'},note:{color:'#e7bed8',marginVertical:12},history:{flex:1},msg:{color:'#fff',padding:10},input:{borderColor:'#ad86a5',borderWidth:1,borderRadius:10,padding:12,color:'#fff',marginTop:8},button:{backgroundColor:'#704566',padding:13,borderRadius:10,marginTop:10},secondary:{borderColor:'#704566',borderWidth:1,padding:10,borderRadius:10,marginTop:8},white:{color:'#fff',textAlign:'center'}});
