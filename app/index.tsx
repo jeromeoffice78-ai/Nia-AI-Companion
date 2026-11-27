@@ -89,7 +89,7 @@ export default function Home(){
     setToken(apiToken||'');setGatewayToken(accessToken||'');setCheckins(enabled);setLoaded(true);
    }catch{Alert.alert('Saved data unavailable','Nia could not load your saved data. Restart after checking device storage. Existing data has not been overwritten.');}
   })();
-  return()=>{active=false;historyVersion.current++;speechVersion.current++;};
+  return()=>{active=false;historyVersion.current++;speechVersion.current++;voiceSession.current++;};
  },[]);
  async function saveConfig(){
   try{
@@ -185,10 +185,11 @@ export default function Home(){
   operation.current=true;setVoiceBusy(true);
   try{
    if(recordingRef.current){
+    const session=voiceSession.current;
     recordingRef.current=false;setRecording(false);await recorder.stop();
     await setAudioModeAsync({allowsRecording:false});
+    if(session!==voiceSession.current||AppState.currentState!=='active')return;
     if(!recorder.uri)throw new Error('No recording was saved.');
-    const session=voiceSession.current;
     const transcript=await transcribeAudio(recorder.uri,endpoint,token);
     const active=session===voiceSession.current&&AppState.currentState==='active';
     const combined=draft.trim()?draft.trim()+'\n'+transcript:transcript;
@@ -206,8 +207,9 @@ export default function Home(){
     speechVersion.current++;alignedPlayer.current?.stop();alignedPlayer.current=null;await Speech.stop();setAvatarSpeaking(false);setAudioPositionMs(null);
     await setAudioModeAsync({allowsRecording:true,playsInSilentMode:true});
     if(AppState.currentState!=='active')throw new Error('Return to Nia before recording.');
+    const session=voiceSession.current;
     await recorder.prepareToRecordAsync();
-    if(AppState.currentState!=='active')throw new Error('Recording was cancelled while Nia was backgrounded.');
+    if(session!==voiceSession.current||AppState.currentState!=='active')throw new Error('Recording was cancelled while Nia was backgrounded.');
     recorder.record();
     recordingRef.current=true;setRecording(true);operation.current=true;
    }
