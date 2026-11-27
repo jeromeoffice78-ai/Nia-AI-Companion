@@ -60,3 +60,13 @@ test('rig facial animation requires timed visemes rather than fabricated speech 
  assert.doesNotMatch(renderer,/speaking\?'viseme_AA':null/);
 });
 
+
+test('speak and reply is opt-in and does not auto-send a typed draft or backgrounded recording',()=>{
+ const home=read('app/index.tsx');
+ assert.match(home,/\[voiceReply,setVoiceReply\]=useState\(false\)/);
+ assert.match(home,/voiceSession\.current\+\+/);
+ assert.match(home,/session===voiceSession\.current&&AppState\.currentState==='active'/);
+ assert.match(home,/if\(voiceReply&&active&&!draft\.trim\(\)\)/);
+ assert.match(home,/await send\(transcript\)/);
+ assert.match(home,/setDraft\(combined\)/);
+});
